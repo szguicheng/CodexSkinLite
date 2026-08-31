@@ -28,10 +28,11 @@ chmod 755 "$app_dir/Contents/MacOS/CodexSkinLite"
 plutil -lint "$app_dir/Contents/Info.plist"
 file "$app_dir/Contents/MacOS/CodexSkinLite" | grep -q 'arm64'
 
-rm -f dist/CodexSkinLite.app.zip dist/CodexSkinLite.app.zip.sha256
+version="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
+archive="dist/CodexSkinLite-${version}-macos-arm64.zip"
+rm -f "$archive" "$archive.sha256"
 ditto -c -k --sequesterRsrc --keepParent \
-  "$app_dir" dist/CodexSkinLite.app.zip
-shasum -a 256 dist/CodexSkinLite.app.zip \
-  > dist/CodexSkinLite.app.zip.sha256
+  "$app_dir" "$archive"
+shasum -a 256 "$archive" > "$archive.sha256"
 
-echo "Created dist/CodexSkinLite.app.zip"
+echo "Created $archive"

@@ -79,6 +79,16 @@ impl Controller {
     }
 
     pub async fn handle(&mut self, command: AppCommand) -> anyhow::Result<()> {
+        let result = self.handle_inner(command).await;
+        if let Err(error) = &result {
+            self.connection = ConnectionState::CompatibilityWarning(error.to_string());
+            self.publish();
+            self.sink.report_error("CodexSkinLite", &error.to_string());
+        }
+        result
+    }
+
+    async fn handle_inner(&mut self, command: AppCommand) -> anyhow::Result<()> {
         match command {
             AppCommand::OpenCodex => {
                 self.connection = self.runtime.open(&self.settings).await?;
@@ -329,13 +339,10 @@ impl ControllerHandle {
 
 pub fn spawn(mut controller: Controller) -> ControllerHandle {
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    let sink = controller.sink.clone();
     tokio::spawn(async move {
         while let Some(command) = receiver.recv().await {
             let shutdown = matches!(command, AppCommand::Shutdown);
-            if let Err(error) = controller.handle(command).await {
-                sink.report_error("CodexSkinLite", &error.to_string());
-            }
+            let _ = controller.handle(command).await;
             if shutdown {
                 break;
             }

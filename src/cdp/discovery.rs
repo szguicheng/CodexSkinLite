@@ -77,14 +77,22 @@ fn is_injectable(target: &CdpTarget) -> bool {
     }
     let title = target.title.to_ascii_lowercase();
     let url = target.url.to_ascii_lowercase();
-    if title.contains("quick chat") || url.contains("quick-chat") {
+    if title.contains("quick chat")
+        || url.contains("quick-chat")
+        || url.contains("initialroute=%2favatar-overlay")
+        || url.contains("initialroute=/avatar-overlay")
+    {
         return false;
     }
-    is_codex_url(&url) && (title.contains("codex") || url.starts_with("https://chatgpt.com/"))
+    is_codex_url(&url)
+        && (title.contains("codex")
+            || (title == "chatgpt" && url.starts_with("app://-/index.html"))
+            || url.starts_with("https://chatgpt.com/"))
 }
 
 fn is_codex_url(url: &str) -> bool {
     (url.starts_with("file://") && url.contains("index.html"))
+        || url.starts_with("app://-/index.html")
         || url.starts_with("https://chatgpt.com/codex")
         || url.starts_with("https://chatgpt.com/c/")
 }
@@ -92,11 +100,13 @@ fn is_codex_url(url: &str) -> bool {
 fn target_rank(target: &CdpTarget) -> u8 {
     let title = target.title.to_ascii_lowercase();
     let url = target.url.to_ascii_lowercase();
-    if title == "codex" && url.starts_with("file://") && url.contains("index.html") {
+    if title == "chatgpt" && url == "app://-/index.html" {
         0
-    } else if title == "codex" {
+    } else if title == "codex" && url.starts_with("file://") && url.contains("index.html") {
         1
-    } else {
+    } else if title == "codex" || title == "chatgpt" {
         2
+    } else {
+        3
     }
 }

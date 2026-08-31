@@ -13,7 +13,10 @@ pub use menu::MenuAction;
 pub struct AppKitState {
     snapshot: Mutex<Option<AppSnapshot>>,
     errors: Mutex<Vec<String>>,
+    refresher: Mutex<Option<UiRefresher>>,
 }
+
+type UiRefresher = Arc<dyn Fn(AppSnapshot) + Send + Sync>;
 
 impl AppKitState {
     pub fn snapshot(&self) -> Option<AppSnapshot> {
@@ -22,6 +25,12 @@ impl AppKitState {
 
     pub fn latest_error(&self) -> Option<String> {
         self.errors.lock().ok()?.last().cloned()
+    }
+
+    pub fn set_refresher(&self, refresher: UiRefresher) {
+        if let Ok(mut current) = self.refresher.lock() {
+            *current = Some(refresher);
+        }
     }
 }
 
@@ -38,7 +47,12 @@ impl AppKitSink {
 impl UiSink for AppKitSink {
     fn publish(&self, snapshot: AppSnapshot) {
         if let Ok(mut current) = self.state.snapshot.lock() {
-            *current = Some(snapshot);
+            *current = Some(snapshot.clone());
+        }
+        if let Ok(current) = self.state.refresher.lock()
+            && let Some(refresher) = current.clone()
+        {
+            refresher(snapshot);
         }
     }
 

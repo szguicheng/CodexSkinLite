@@ -22,6 +22,28 @@ fn rejects_page_that_only_spoofs_the_codex_title() {
     assert!(pick_primary_target(&targets).is_err());
 }
 
+#[test]
+fn selects_current_app_scheme_main_target_over_avatar_overlay() {
+    let targets = vec![
+        CdpTarget {
+            id: "overlay".into(),
+            title: "ChatGPT".into(),
+            url: "app://-/index.html?initialRoute=%2Favatar-overlay".into(),
+            kind: "page".into(),
+            web_socket_debugger_url: Some("ws://127.0.0.1:9222/devtools/page/overlay".into()),
+        },
+        CdpTarget {
+            id: "main".into(),
+            title: "ChatGPT".into(),
+            url: "app://-/index.html".into(),
+            kind: "page".into(),
+            web_socket_debugger_url: Some("ws://127.0.0.1:9222/devtools/page/main".into()),
+        },
+    ];
+
+    assert_eq!(pick_primary_target(&targets).unwrap().id, "main");
+}
+
 #[tokio::test]
 async fn lists_targets_from_a_loopback_endpoint() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

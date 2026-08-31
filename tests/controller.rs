@@ -23,6 +23,16 @@ async fn failed_theme_apply_keeps_previous_active_theme() {
         env.settings.load().unwrap().active_theme_id.as_deref(),
         Some("eva-warm-cream")
     );
+    assert!(matches!(
+        env.sink
+            .snapshots
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .connection,
+        ConnectionState::CompatibilityWarning(_)
+    ));
 }
 
 #[tokio::test]
@@ -86,6 +96,7 @@ struct ControllerEnvironment {
     _dir: tempfile::TempDir,
     settings: SettingsStore,
     controller: Controller,
+    sink: Arc<RecordingSink>,
 }
 
 fn controller_environment(fail_apply: bool) -> ControllerEnvironment {
@@ -113,11 +124,12 @@ fn controller_environment(fail_apply: bool) -> ControllerEnvironment {
         fail_apply: Mutex::new(fail_apply),
     });
     let sink = Arc::new(RecordingSink::default());
-    let controller = Controller::new(settings.clone(), themes, runtime, sink).unwrap();
+    let controller = Controller::new(settings.clone(), themes, runtime, sink.clone()).unwrap();
     ControllerEnvironment {
         _dir: dir,
         settings,
         controller,
+        sink,
     }
 }
 

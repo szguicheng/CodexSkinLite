@@ -411,7 +411,7 @@
     metrics: { ...state.metrics },
   });
 
-  const apply = async (payload) => {
+  const apply = (payload) => {
     const revision = Number(payload?.revision || 0);
     if (revision < state.revision) return status();
     state.revision = revision;

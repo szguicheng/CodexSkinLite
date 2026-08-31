@@ -6,10 +6,14 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{MainThreadOnly, sel};
 use objc2_app_kit::{
-    NSBackingStoreType, NSButton, NSControlStateValueOn, NSPopUpButton, NSTextField, NSView,
-    NSWindow, NSWindowStyleMask,
+    NSBackingStoreType, NSButton, NSControlStateValueOff, NSControlStateValueOn, NSPopUpButton,
+    NSTextField, NSView, NSWindow, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+
+use dispatch2::MainThreadBound;
+
+use crate::model::AppSnapshot;
 
 use super::AppKitState;
 
@@ -156,7 +160,7 @@ pub(super) fn show(
         .as_ref()
         .map(|value| format!("状态：{:?}", value.connection))
         .unwrap_or_else(|| "状态：未连接".into());
-    add_label(&content, &status, 24.0, 158.0, 460.0, 22.0, mtm);
+    let status_label = add_label(&content, &status, 24.0, 158.0, 460.0, 22.0, mtm);
     let app_path = snapshot
         .as_ref()
         .map(|value| value.settings.codex_app_path.display().to_string())
@@ -196,8 +200,65 @@ pub(super) fn show(
         add_label(&content, &error, 24.0, 30.0, 470.0, 42.0, mtm);
     }
 
+    let ui = Arc::new(MainThreadBound::new(
+        SettingsUi {
+            status_label,
+            theme_enabled,
+            theme_popup: popup,
+            centered,
+            width,
+        },
+        mtm,
+    ));
+    state.set_refresher(Arc::new(move |snapshot| {
+        let ui = ui.clone();
+        ui.get_on_main(move |handles| handles.refresh(&snapshot));
+    }));
+
     window.makeKeyAndOrderFront(None);
     *slot.borrow_mut() = Some(window);
+}
+
+struct SettingsUi {
+    status_label: Retained<NSTextField>,
+    theme_enabled: Retained<NSButton>,
+    theme_popup: Retained<NSPopUpButton>,
+    centered: Retained<NSButton>,
+    width: Retained<NSTextField>,
+}
+
+impl SettingsUi {
+    fn refresh(&self, snapshot: &AppSnapshot) {
+        self.status_label
+            .setStringValue(&NSString::from_str(&format!(
+                "状态：{:?}",
+                snapshot.connection
+            )));
+        self.theme_enabled
+            .setState(if snapshot.settings.theme_enabled {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        self.centered
+            .setState(if snapshot.settings.conversation_centered {
+                NSControlStateValueOn
+            } else {
+                NSControlStateValueOff
+            });
+        self.width.setStringValue(&NSString::from_str(
+            &snapshot.settings.conversation_max_width.to_string(),
+        ));
+        self.theme_popup.removeAllItems();
+        for theme in &snapshot.themes {
+            self.theme_popup
+                .addItemWithTitle(&NSString::from_str(&theme.id));
+        }
+        if let Some(id) = &snapshot.settings.active_theme_id {
+            self.theme_popup
+                .selectItemWithTitle(&NSString::from_str(id));
+        }
+    }
 }
 
 fn add_label(
@@ -208,10 +269,11 @@ fn add_label(
     width: f64,
     height: f64,
     mtm: MainThreadMarker,
-) {
+) -> Retained<NSTextField> {
     let label = NSTextField::labelWithString(&NSString::from_str(text), mtm);
     label.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)));
     content.addSubview(&label);
+    label
 }
 
 #[allow(clippy::too_many_arguments)]

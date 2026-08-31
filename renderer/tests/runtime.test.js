@@ -20,6 +20,15 @@ describe("bootstrap", () => {
     expect(typeof first.status).toBe("function");
     expect(typeof first.cleanup).toBe("function");
   });
+
+  it("returns a synchronous revision acknowledgment for CDP", () => {
+    const window = installRuntime({ fixture: "modernThread" });
+
+    const result = window.__CODEX_SKIN_LITE__.apply(layoutPayload(false, 900, 42));
+
+    expect(result).not.toBeInstanceOf(Promise);
+    expect(result.revision).toBe(42);
+  });
 });
 
 describe("centered conversation", () => {
