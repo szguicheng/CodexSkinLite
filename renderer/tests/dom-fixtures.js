@@ -10,6 +10,7 @@ export function installRuntime(input) {
   const options = input instanceof Window ? { window: input } : input || {};
   const window = options.window || new Window({ url: "file:///index.html" });
   if (options.fixture) window.document.body.innerHTML = fixtureHtml(options.fixture);
+  if (options.fixture === "modernThreadWithRightPanel") installPanelGeometry(window);
   if (!window.__testObserverCounts) installObserverCounters(window);
   if (!window.__testBlobUrls) {
     let nextBlobId = 1;
@@ -75,7 +76,14 @@ function fixtureHtml(name) {
     name === "modernThreadWithRightPanel"
       ? '<aside data-app-shell-right-panel="true"></aside>'
       : "";
-  if (name === "modernThread" || rightPanel) {
+  if (
+    name === "modernThread" ||
+    name === "composerWithoutAttachments" ||
+    name === "longFocusedThread" ||
+    rightPanel
+  ) {
+    const attachment =
+      name === "composerWithoutAttachments" ? "" : "<span>attachment</span>";
     return `
       <div data-app-shell-root="true">
         <aside class="app-shell-left-panel"></aside>
@@ -88,7 +96,7 @@ function fixtureHtml(name) {
               </div>
             </div>
             <div data-composer-surface-variant="default" data-composer-radius-variant="round">
-              <div data-composer-attachments="true"><span>attachment</span></div>
+              <div data-composer-attachments="true">${attachment}</div>
               <div data-composer-footer-responsive="true"></div>
             </div>
           </div>
@@ -97,6 +105,31 @@ function fixtureHtml(name) {
       </div>`;
   }
   throw new Error(`unknown fixture: ${name}`);
+}
+
+function installPanelGeometry(window) {
+  const rect = (left, right) => ({
+    bottom: 800,
+    height: 800,
+    left,
+    right,
+    top: 0,
+    width: right - left,
+    x: left,
+    y: 0,
+    toJSON() {
+      return this;
+    },
+  });
+  window.document.querySelector("main").getBoundingClientRect = () => rect(0, 1200);
+  window.document.querySelector(".app-shell-left-panel").getBoundingClientRect = () =>
+    rect(-240, 0);
+  window.document.querySelector("[data-app-shell-right-panel]").getBoundingClientRect = () =>
+    rect(900, 1200);
+  window.document.querySelector("[data-csl-thread-content]").getBoundingClientRect = () =>
+    rect(150, 1050);
+  window.document.querySelector("[data-composer-surface-variant]").getBoundingClientRect = () =>
+    rect(150, 1050);
 }
 
 export function evaPayload(revision = 1) {

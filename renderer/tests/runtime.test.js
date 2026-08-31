@@ -145,3 +145,52 @@ describe("Skin API", () => {
     expect(main.hasAttribute("data-ds-part")).toBe(false);
   });
 });
+
+describe("composer regressions", () => {
+  it("marks an empty toolbar without creating a divider", async () => {
+    const window = installRuntime({ fixture: "composerWithoutAttachments" });
+
+    await window.__CODEX_SKIN_LITE__.apply(evaPayload());
+
+    const toolbar = window.document.querySelector(
+      "[data-composer-footer-responsive]",
+    );
+    expect(toolbar.dataset.dsPart).toBe("composer-toolbar-empty");
+    expect(
+      window.document.querySelectorAll("[data-csl-divider]"),
+    ).toHaveLength(0);
+  });
+
+  it("focused scrolling and streaming never clear the theme", async () => {
+    const window = installRuntime({ fixture: "longFocusedThread" });
+    await window.__CODEX_SKIN_LITE__.apply(evaPayload());
+    const message = window.document.querySelector("article");
+    const thread = window.document.querySelector(".thread-scroll-container");
+    const before = window.__CODEX_SKIN_LITE__.status().metrics.fullScans;
+
+    for (let index = 0; index < 100; index += 1) {
+      thread.dispatchEvent(new window.Event("scroll"));
+      message.append(window.document.createTextNode("stream"));
+    }
+    await nextFrame(window);
+
+    expect(window.document.querySelector("#codex-skin-lite-theme")).not.toBeNull();
+    expect(window.__testBlobUrls.revoked).toHaveLength(0);
+    expect(window.__CODEX_SKIN_LITE__.status().metrics.fullScans).toBe(before);
+  });
+
+  it("centers content inside the viewport not covered by the right panel", async () => {
+    const window = installRuntime({ fixture: "modernThreadWithRightPanel" });
+    const content = window.document.querySelector("[data-csl-thread-content]");
+    const composer = window.document.querySelector(
+      "[data-composer-surface-variant]",
+    );
+
+    await window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+
+    for (const element of [content, composer]) {
+      expect(element.style.marginLeft).toBe("0px");
+      expect(element.style.marginRight).toBe("300px");
+    }
+  });
+});

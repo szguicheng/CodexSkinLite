@@ -351,6 +351,32 @@
       setOwnedWidth(element, "margin-left", "auto");
       setOwnedWidth(element, "margin-right", "auto");
     }
+    const mainRect = layout.main?.getBoundingClientRect();
+    if (mainRect?.width > 0) {
+      let availableLeft = mainRect.left;
+      let availableRight = mainRect.right;
+      for (const sidebar of layout.sidebars) {
+        const rect = sidebar.getBoundingClientRect();
+        const overlap =
+          Math.min(mainRect.right, rect.right) -
+          Math.max(mainRect.left, rect.left);
+        if (overlap <= 0) continue;
+        if (rect.left <= mainRect.left && rect.right > availableLeft) {
+          availableLeft = Math.min(rect.right, mainRect.right);
+        } else if (rect.right >= mainRect.right && rect.left < availableRight) {
+          availableRight = Math.max(rect.left, mainRect.left);
+        }
+      }
+      const availableWidth = Math.max(0, availableRight - availableLeft);
+      const elementWidth = Math.min(width, availableWidth);
+      const free = Math.max(0, availableWidth - elementWidth);
+      const leftMargin = availableLeft - mainRect.left + free / 2;
+      const rightMargin = mainRect.right - availableRight + free / 2;
+      for (const element of next) {
+        setOwnedWidth(element, "margin-left", `${leftMargin}px`);
+        setOwnedWidth(element, "margin-right", `${rightMargin}px`);
+      }
+    }
   };
 
   const reconcileLayout = (_reasons) => {
