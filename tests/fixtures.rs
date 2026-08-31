@@ -33,6 +33,7 @@ pub fn theme_environment_with_active(_id: &str) -> ThemeEnvironment {
 }
 
 pub struct ThemeZipOptions {
+    pub theme_id: String,
     pub platform: String,
     pub capabilities: Vec<String>,
     pub image_hash: Option<String>,
@@ -45,6 +46,7 @@ pub struct ThemeZipOptions {
 impl ThemeZipOptions {
     pub fn valid() -> Self {
         Self {
+            theme_id: "eva-warm-cream".into(),
             platform: "macos".into(),
             capabilities: vec!["background".into(), "tokens".into(), "safe-css".into()],
             image_hash: None,
@@ -66,8 +68,8 @@ pub fn theme_zip(options: ThemeZipOptions) -> Vec<u8> {
     let css = br#"[data-ds-part="main"] { background-color: #111111; }"#.to_vec();
     let theme = serde_json::to_vec(&json!({
         "schemaVersion": 1,
-        "id": "eva-warm-cream",
-        "name": "EVA Warm Cream",
+        "id": options.theme_id,
+        "name": options.theme_id,
         "image": options.image_name,
         "appearance": "light",
         "art": { "focusX": 0.5, "focusY": 0.5, "safeArea": "none", "taskMode": "ambient" },
@@ -83,7 +85,7 @@ pub fn theme_zip(options: ThemeZipOptions) -> Vec<u8> {
         .unwrap_or_else(|| sha256(&options.image_bytes));
     let manifest = serde_json::to_vec(&json!({
         "packageVersion": 1,
-        "themeId": "eva-warm-cream",
+        "themeId": options.theme_id,
         "version": "1.0.0",
         "skinApiVersion": 1,
         "minClientVersion": "0.0.0",
