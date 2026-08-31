@@ -1,0 +1,34 @@
+[package]
+name = "codex-skin-lite"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "AGPL-3.0-only"
+repository = "https://github.com/szguicheng/CodexSkinLite"
+publish = false
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+directories = "6"
+dispatch2 = "0.3.1"
+futures-util = "0.3"
+reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "process", "sync"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = "0.3.2"
+objc2-foundation = "0.3.2"
+
+[dev-dependencies]
+tempfile = "3"
