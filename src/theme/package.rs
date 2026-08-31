@@ -71,7 +71,9 @@ pub struct DreamSkinPackageFile {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidatedThemePackage {
     pub manifest: DreamSkinPackageManifest,
+    pub manifest_bytes: Vec<u8>,
     pub theme: Value,
+    pub theme_bytes: Vec<u8>,
     pub css: String,
     pub image_name: String,
     pub image_bytes: Vec<u8>,
@@ -199,7 +201,9 @@ pub fn validate_package(bytes: &[u8]) -> Result<ValidatedThemePackage, ThemeErro
 
     Ok(ValidatedThemePackage {
         manifest,
+        manifest_bytes,
         theme,
+        theme_bytes,
         css,
         image_name,
         image_bytes,

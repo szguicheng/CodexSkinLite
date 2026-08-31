@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
+tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "process", "sync"] }
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake"] }
 tracing = "0.1"
@@ -29,6 +30,3 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 objc2 = "0.6.4"
 objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
-
-[dev-dependencies]
-tempfile = "3"

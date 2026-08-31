@@ -1,8 +1,36 @@
+#![allow(dead_code)]
+
 use std::io::{Cursor, Write};
 
 use base64::Engine as _;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+
+use codex_skin_lite::paths::AppPaths;
+use codex_skin_lite::theme::ThemeStore;
+
+pub struct ThemeEnvironment {
+    pub _dir: tempfile::TempDir,
+    pub paths: AppPaths,
+    pub store: ThemeStore,
+}
+
+pub fn theme_environment() -> ThemeEnvironment {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = AppPaths::for_test(dir.path());
+    let store = ThemeStore::new(paths.clone());
+    ThemeEnvironment {
+        _dir: dir,
+        paths,
+        store,
+    }
+}
+
+pub fn theme_environment_with_active(_id: &str) -> ThemeEnvironment {
+    let env = theme_environment();
+    env.store.import_zip_bytes(&valid_theme_zip()).unwrap();
+    env
+}
 
 pub struct ThemeZipOptions {
     pub platform: String,
