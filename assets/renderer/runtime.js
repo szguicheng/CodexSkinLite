@@ -12,12 +12,31 @@
     themeSignature: "",
     blobUrl: "",
     ownedVariables: new Map(),
+    mutationObserver: null,
+    resizeObserver: null,
+    observedRoot: null,
+    rafId: 0,
+    pendingReasons: new Set(),
+    widthElements: new Set(),
+    widthOriginals: new WeakMap(),
+    widthHadStyle: new WeakMap(),
     metrics: {
       layoutPasses: 0,
       fullScans: 0,
       fullScansDuringScroll: 0,
     },
   };
+
+  const LAYOUT_SELECTOR = [
+    "main",
+    "header",
+    "aside",
+    ".thread-scroll-container",
+    "[data-app-shell-main-content-layout]",
+    "[data-composer-surface-variant]",
+    "[data-csl-thread-content]",
+    "[data-app-shell-right-panel]",
+  ].join(",");
 
   const KNOWN_PARTS = new Set([
     "root",
@@ -182,6 +201,172 @@
       ${theme.compiledCss || ""}`;
   };
 
+  const findLayout = () => {
+    const main = document.querySelector(
+      'main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]',
+    );
+    return {
+      root:
+        main?.closest("[data-app-shell-root]") ||
+        main?.parentElement ||
+        document.documentElement,
+      main,
+      content: main?.querySelector(
+        '[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]',
+      ),
+      composer: main?.querySelector(
+        '[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome',
+      ),
+      sidebars: queryAll(
+        document,
+        '.app-shell-left-panel, [data-app-shell-right-panel], [data-context-panel], aside[class*="_RightPanel_"]',
+      ),
+    };
+  };
+
+  const mutationAffectsLayout = (record) => {
+    if (record.type === "attributes") return true;
+    const nodes = [...record.addedNodes, ...record.removedNodes];
+    return nodes.some(
+      (node) =>
+        node.nodeType === Node.ELEMENT_NODE &&
+        (node.matches?.(LAYOUT_SELECTOR) || node.querySelector?.(LAYOUT_SELECTOR)),
+    );
+  };
+
+  const schedule = (reason) => {
+    state.pendingReasons.add(reason);
+    if (state.rafId) return;
+    state.rafId = requestAnimationFrame(() => {
+      state.rafId = 0;
+      const reasons = new Set(state.pendingReasons);
+      state.pendingReasons.clear();
+      reconcileLayout(reasons);
+    });
+  };
+
+  const ensureObservers = (layout) => {
+    if (!state.mutationObserver) {
+      state.mutationObserver = new MutationObserver((records) => {
+        if (records.some(mutationAffectsLayout)) schedule("mutation");
+      });
+    }
+    if (state.observedRoot !== layout.root) {
+      state.mutationObserver.disconnect();
+      state.mutationObserver.observe(layout.root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: [
+          "class",
+          "hidden",
+          "data-state",
+          "aria-hidden",
+          "data-app-shell-main-content-layout",
+        ],
+      });
+      state.observedRoot = layout.root;
+    }
+    if (!state.resizeObserver) {
+      state.resizeObserver = new ResizeObserver(() => schedule("resize"));
+    }
+    state.resizeObserver.disconnect();
+    for (const node of [
+      layout.main,
+      layout.content,
+      layout.composer,
+      ...layout.sidebars,
+    ]) {
+      if (node?.isConnected) state.resizeObserver.observe(node);
+    }
+  };
+
+  const disconnectObservers = () => {
+    state.mutationObserver?.disconnect();
+    state.resizeObserver?.disconnect();
+    state.mutationObserver = null;
+    state.resizeObserver = null;
+    state.observedRoot = null;
+    if (state.rafId) cancelAnimationFrame(state.rafId);
+    state.rafId = 0;
+    state.pendingReasons.clear();
+  };
+
+  const rememberWidthProperty = (element, property) => {
+    let originals = state.widthOriginals.get(element);
+    if (!originals) {
+      originals = new Map();
+      state.widthOriginals.set(element, originals);
+      state.widthHadStyle.set(element, element.hasAttribute("style"));
+    }
+    if (!originals.has(property)) {
+      originals.set(property, {
+        value: element.style.getPropertyValue(property),
+        priority: element.style.getPropertyPriority(property),
+      });
+    }
+  };
+
+  const setOwnedWidth = (element, property, value) => {
+    rememberWidthProperty(element, property);
+    element.style.setProperty(property, value);
+  };
+
+  const restoreWidthElement = (element) => {
+    const originals = state.widthOriginals.get(element);
+    if (!originals) return;
+    for (const [property, original] of originals) {
+      if (original.value) {
+        element.style.setProperty(property, original.value, original.priority);
+      } else {
+        element.style.removeProperty(property);
+      }
+    }
+    if (!state.widthHadStyle.get(element) && !element.style.cssText) {
+      element.removeAttribute("style");
+    }
+    state.widthOriginals.delete(element);
+    state.widthHadStyle.delete(element);
+  };
+
+  const clearCenteredWidth = () => {
+    for (const element of state.widthElements) restoreWidthElement(element);
+    state.widthElements.clear();
+  };
+
+  const applyCenteredWidth = (layout, payload) => {
+    const next = new Set([layout.content, layout.composer].filter(Boolean));
+    for (const element of state.widthElements) {
+      if (!next.has(element)) restoreWidthElement(element);
+    }
+    state.widthElements = next;
+    const width = Math.max(
+      320,
+      Math.min(4000, Math.round(Number(payload.conversationMaxWidth) || 900)),
+    );
+    for (const element of next) {
+      setOwnedWidth(element, "box-sizing", "border-box");
+      setOwnedWidth(element, "width", "100%");
+      setOwnedWidth(element, "max-width", `${width}px`);
+      setOwnedWidth(element, "margin-left", "auto");
+      setOwnedWidth(element, "margin-right", "auto");
+    }
+  };
+
+  const reconcileLayout = (_reasons) => {
+    const payload = state.payload || {};
+    const layout = findLayout();
+    state.metrics.layoutPasses += 1;
+    if (payload.themeEnabled && payload.theme) {
+      state.metrics.fullScans += 1;
+      markParts();
+    }
+    if (payload.conversationCentered) applyCenteredWidth(layout, payload);
+    else clearCenteredWidth();
+    if (payload.themeEnabled || payload.conversationCentered) ensureObservers(layout);
+    else disconnectObservers();
+  };
+
   const status = () => ({
     apiVersion: API_VERSION,
     revision: state.revision,
@@ -194,16 +379,18 @@
     state.revision = revision;
     state.payload = payload || null;
     if (payload?.themeEnabled && payload.theme) {
-      markParts();
       applyTheme(payload.theme);
     } else {
       clearTheme();
       clearParts();
     }
+    reconcileLayout(new Set(["apply"]));
     return status();
   };
 
   const cleanup = () => {
+    disconnectObservers();
+    clearCenteredWidth();
     clearTheme();
     clearParts();
     state.payload = null;

@@ -10,6 +10,7 @@ export function installRuntime(input) {
   const options = input instanceof Window ? { window: input } : input || {};
   const window = options.window || new Window({ url: "file:///index.html" });
   if (options.fixture) window.document.body.innerHTML = fixtureHtml(options.fixture);
+  if (!window.__testObserverCounts) installObserverCounters(window);
   if (!window.__testBlobUrls) {
     let nextBlobId = 1;
     window.__testBlobUrls = { created: [], revoked: [] };
@@ -27,6 +28,48 @@ export function installRuntime(input) {
   return window;
 }
 
+function installObserverCounters(window) {
+  const counts = { mutation: 0, resize: 0, intervals: 0 };
+  const NativeMutationObserver = window.MutationObserver;
+  const NativeResizeObserver = window.ResizeObserver;
+  window.MutationObserver = class {
+    constructor(callback) {
+      counts.mutation += 1;
+      this.inner = new NativeMutationObserver(callback);
+    }
+    observe(...args) {
+      return this.inner.observe(...args);
+    }
+    disconnect() {
+      return this.inner.disconnect();
+    }
+    takeRecords() {
+      return this.inner.takeRecords();
+    }
+  };
+  window.ResizeObserver = class {
+    constructor(callback) {
+      counts.resize += 1;
+      this.inner = NativeResizeObserver ? new NativeResizeObserver(callback) : null;
+    }
+    observe(...args) {
+      return this.inner?.observe(...args);
+    }
+    unobserve(...args) {
+      return this.inner?.unobserve(...args);
+    }
+    disconnect() {
+      return this.inner?.disconnect();
+    }
+  };
+  const nativeSetInterval = window.setInterval.bind(window);
+  window.setInterval = (...args) => {
+    counts.intervals += 1;
+    return nativeSetInterval(...args);
+  };
+  window.__testObserverCounts = counts;
+}
+
 function fixtureHtml(name) {
   const rightPanel =
     name === "modernThreadWithRightPanel"
@@ -40,7 +83,9 @@ function fixtureHtml(name) {
           <header data-pip-obstacle="app-shell-header"></header>
           <div data-app-shell-main-content-layout="thread-edge-scroll">
             <div class="thread-scroll-container" data-app-action-timeline-scroll="true">
-              <article data-message-id="one"></article>
+              <div data-csl-thread-content="true" style="padding-top: 2px">
+                <article data-message-id="one"></article>
+              </div>
             </div>
             <div data-composer-surface-variant="default" data-composer-radius-variant="round">
               <div data-composer-attachments="true"><span>attachment</span></div>
@@ -89,4 +134,19 @@ export function blueEyesPayload(revision = 2) {
   payload.theme.compiledCss =
     '@layer dreamskin-community { [data-ds-part="thread"] { backdrop-filter: blur(14px) !important; } }';
   return payload;
+}
+
+export function layoutPayload(enabled, width = 900, revision = 1) {
+  return {
+    revision,
+    themeEnabled: false,
+    theme: null,
+    conversationCentered: enabled,
+    conversationMaxWidth: width,
+  };
+}
+
+export async function nextFrame(window) {
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
