@@ -144,8 +144,47 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .unwrap();
     assert_eq!(
         applied.as_str().unwrap(),
-        r#"{"apiVersion":4,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerPosition":"fixed","footerWidth":"777px","titleTransparent":true}"#
+        r#"{"apiVersion":6,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerPosition":"fixed","footerWidth":"777px","titleTransparent":true}"#
     );
+    let scroll_geometry = session
+        .evaluate(
+            r#"(() => {
+              const main = document.querySelector('main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]');
+              const thread = main?.querySelector('.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container');
+              const footer = thread?.querySelector('[data-thread-scroll-footer]');
+              if (!thread || !footer) return JSON.stringify({ missing: true });
+              const originalScrollTop = thread.scrollTop;
+              const before = footer.getBoundingClientRect();
+              let changedScrollTop = originalScrollTop;
+              for (const delta of [-320, 320]) {
+                thread.scrollTop = originalScrollTop + delta;
+                changedScrollTop = thread.scrollTop;
+                if (Math.abs(changedScrollTop - originalScrollTop) > 1) break;
+              }
+              const after = footer.getBoundingClientRect();
+              const threadRect = thread.getBoundingClientRect();
+              thread.scrollTop = originalScrollTop;
+              return JSON.stringify({
+                scrollChanged: Math.abs(changedScrollTop - originalScrollTop) > 1,
+                leftDelta: after.left - before.left,
+                topDelta: after.top - before.top,
+                bottomDelta: after.bottom - before.bottom,
+                bottomGap: threadRect.bottom - after.bottom
+              });
+            })()"#,
+        )
+        .await
+        .unwrap();
+    let geometry: serde_json::Value =
+        serde_json::from_str(scroll_geometry.as_str().unwrap()).unwrap();
+    assert_eq!(
+        geometry["scrollChanged"], true,
+        "thread did not scroll: {geometry}"
+    );
+    for key in ["leftDelta", "topDelta", "bottomDelta", "bottomGap"] {
+        let value = geometry[key].as_f64().unwrap();
+        assert!(value.abs() <= 1.0, "{key} changed by {value}: {geometry}");
+    }
     tokio::time::sleep(std::time::Duration::from_millis(750)).await;
     let settled = session
         .evaluate("JSON.stringify(window.__CODEX_SKIN_LITE__.status().metrics)")

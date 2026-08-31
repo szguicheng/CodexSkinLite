@@ -213,7 +213,7 @@ CodexSkinLite exposes these stable parts:
 - `home`: new-conversation home surface.
 - `home-hero`: home hero content.
 - `project-list`: project list surface.
-- `thread`: existing-conversation scroll surface.
+- `thread`: stable viewport surrounding the existing-conversation scroll surface.
 - `message`: individual message surfaces.
 - `composer`: complete input surface.
 - `composer-toolbar`: composer action/footer region.
@@ -281,6 +281,12 @@ CodexSkinLite always keeps the React-managed Codex composer footer in the active
 thread scroll container. It does not reparent the footer or impose a second
 fixed-position copy, because changing the parent of React-owned DOM can leave a
 stale composer behind during route transitions.
+
+The `thread` theme part belongs to the stable viewport parent, while the actual
+scroll node receives only `data-ds-thread-scroll`. This keeps theme filters off
+the scrolling containing block. The native footer can therefore use
+viewport-local `position: fixed` with zero insets without inheriting scroll
+coordinates or requiring window-coordinate offsets.
 
 At bootstrap and on relevant layout mutations, the runtime resolves the active
 thread scroll surface using the stable Codex anchor and visibility state. If

@@ -139,9 +139,10 @@ describe("Skin API", () => {
 
     expect(window.document.querySelector("main").dataset.dsPart).toBe("main");
     expect(window.document.querySelector("header").dataset.dsPart).toBe("header");
-    expect(window.document.querySelector(".thread-scroll-container").dataset.dsPart).toBe(
-      "thread",
-    );
+    const scroll = window.document.querySelector(".thread-scroll-container");
+    expect(scroll.parentElement.dataset.dsPart).toBe("thread");
+    expect(scroll.hasAttribute("data-ds-part")).toBe(false);
+    expect(scroll.dataset.dsThreadScroll).toBe("true");
     expect(
       [...window.document.querySelectorAll('[data-ds-part="sidebar"]')],
     ).toHaveLength(2);
@@ -198,7 +199,7 @@ describe("Skin API", () => {
 });
 
 describe("composer regressions", () => {
-  it("keeps a themed footer fixed inside Codex's native scrolling container", () => {
+  it("fixes a themed footer to the stable thread viewport without moving it", () => {
     const window = installRuntime({ fixture: "modernScrollingComposerWithRightPanel" });
     const scroll = window.document.querySelector(".thread-scroll-container");
     const footer = window.document.querySelector("[data-thread-scroll-footer]");
@@ -209,10 +210,12 @@ describe("composer regressions", () => {
 
     expect(footer.parentElement).toBe(scroll);
     expect(footer.hasAttribute("data-csl-composer-dock")).toBe(false);
+    expect(scroll.parentElement.dataset.dsPart).toBe("thread");
+    expect(scroll.hasAttribute("data-ds-part")).toBe(false);
     expect(footer.style.position).toBe("fixed");
     expect(footer.style.bottom).toBe("0px");
     expect(footer.style.left).toBe("0px");
-    expect(footer.style.right).not.toBe("");
+    expect(footer.style.right).toBe("0px");
 
     window.__CODEX_SKIN_LITE__.cleanup();
     expect(footer.parentElement).toBe(scroll);

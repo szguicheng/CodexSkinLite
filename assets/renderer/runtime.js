@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 4;
+  const API_VERSION = 6;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -156,7 +156,7 @@
     remember(home?.querySelector("[data-testid='home-icon']"), "home-hero");
     remember(home?.querySelector("[data-feature='game-source']"), "project-list");
     const thread = findActiveScroll(main);
-    remember(thread, "thread");
+    remember(thread?.parentElement, "thread");
     for (const node of queryAll(
       main || document,
       "article, [data-message-author-role], [data-message-id]",
@@ -363,30 +363,6 @@
     state.composerPosition = { node: null, styles: null, hadStyle: false };
   };
 
-  const availableMainBounds = (layout) => {
-    const mainRect = layout.main?.getBoundingClientRect();
-    if (!mainRect || mainRect.width <= 0) return null;
-    let left = mainRect.left;
-    let right = mainRect.right;
-    for (const sidebar of layout.sidebars) {
-      const rect = sidebar.getBoundingClientRect();
-      const overlap =
-        Math.min(mainRect.right, rect.right) - Math.max(mainRect.left, rect.left);
-      if (overlap <= 0) continue;
-      if (rect.left <= mainRect.left && rect.right > left) {
-        left = Math.min(rect.right, mainRect.right);
-      } else if (rect.right >= mainRect.right && rect.left < right) {
-        right = Math.max(rect.left, mainRect.left);
-      }
-    }
-    const viewportWidth = Math.max(
-      document.documentElement?.clientWidth || 0,
-      window.innerWidth || 0,
-      mainRect.right,
-    );
-    return { left, right, viewportWidth };
-  };
-
   const syncComposerPosition = (layout, enabled) => {
     const footer = layout.footer;
     if (!enabled || !footer || !layout.scroll) {
@@ -411,17 +387,12 @@
         ),
       };
     }
-    const bounds = availableMainBounds(layout);
-    if (!bounds) {
-      restoreComposerPosition();
-      return;
-    }
     for (const [property, value] of Object.entries({
       position: "fixed",
       top: "auto",
-      right: `${Math.max(0, bounds.viewportWidth - bounds.right)}px`,
+      right: "0px",
       bottom: "0px",
-      left: `${Math.max(0, bounds.left)}px`,
+      left: "0px",
       width: "auto",
       "z-index": "10",
     })) {
