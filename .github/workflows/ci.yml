@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify Apple Silicon runner
+        run: uname -m | grep -qx arm64
+      - name: Install Rust 1.97.1
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.97.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: renderer/package-lock.json
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all-targets
+      - run: npm ci --prefix renderer
+      - run: npm test --prefix renderer
+      - run: node scripts/measure-renderer.mjs
+      - run: cargo build --release --target aarch64-apple-darwin
+

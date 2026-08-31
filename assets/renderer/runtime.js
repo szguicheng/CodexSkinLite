@@ -24,7 +24,10 @@
       layoutPasses: 0,
       fullScans: 0,
       fullScansDuringScroll: 0,
+      layoutMeanMs: 0,
+      layoutP95Ms: 0,
     },
+    layoutDurations: [],
   };
 
   const LAYOUT_SELECTOR = [
@@ -380,6 +383,7 @@
   };
 
   const reconcileLayout = (_reasons) => {
+    const startedAt = performance.now();
     const payload = state.payload || {};
     const layout = findLayout();
     state.metrics.layoutPasses += 1;
@@ -391,6 +395,14 @@
     else clearCenteredWidth();
     if (payload.themeEnabled || payload.conversationCentered) ensureObservers(layout);
     else disconnectObservers();
+    const duration = performance.now() - startedAt;
+    state.layoutDurations.push(duration);
+    if (state.layoutDurations.length > 200) state.layoutDurations.shift();
+    const sorted = [...state.layoutDurations].sort((left, right) => left - right);
+    state.metrics.layoutMeanMs =
+      state.layoutDurations.reduce((sum, value) => sum + value, 0) /
+      state.layoutDurations.length;
+    state.metrics.layoutP95Ms = sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)];
   };
 
   const status = () => ({

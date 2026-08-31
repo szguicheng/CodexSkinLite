@@ -15,7 +15,11 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            codex_app_path: PathBuf::from("/Applications/Codex.app"),
+            codex_app_path: if PathBuf::from("/Applications/ChatGPT.app").is_dir() {
+                PathBuf::from("/Applications/ChatGPT.app")
+            } else {
+                PathBuf::from("/Applications/Codex.app")
+            },
             debug_port: 9222,
             theme_enabled: false,
             active_theme_id: None,

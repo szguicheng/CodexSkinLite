@@ -37,6 +37,51 @@ async fn width_persists_only_after_renderer_verification() {
     assert_eq!(env.settings.load().unwrap().conversation_max_width, 880);
 }
 
+#[tokio::test]
+async fn first_import_selects_theme_without_enabling_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = AppPaths::for_test(dir.path());
+    let settings = SettingsStore::new(paths.clone());
+    let themes = ThemeStore::new(paths);
+    let runtime = Arc::new(FakeRuntime {
+        fail_apply: Mutex::new(false),
+    });
+    let sink = Arc::new(RecordingSink::default());
+    let mut controller = Controller::new(settings.clone(), themes, runtime, sink).unwrap();
+    let zip_path = dir.path().join("eva.zip");
+    std::fs::write(&zip_path, fixtures::valid_theme_zip()).unwrap();
+
+    controller
+        .handle(AppCommand::ImportTheme(zip_path))
+        .await
+        .unwrap();
+
+    let stored = settings.load().unwrap();
+    assert_eq!(stored.active_theme_id.as_deref(), Some("eva-warm-cream"));
+    assert!(!stored.theme_enabled);
+}
+
+#[test]
+fn startup_selects_the_only_imported_theme_when_settings_are_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = AppPaths::for_test(dir.path());
+    let settings = SettingsStore::new(paths.clone());
+    let themes = ThemeStore::new(paths);
+    themes
+        .import_zip_bytes(&fixtures::valid_theme_zip())
+        .unwrap();
+    let runtime = Arc::new(FakeRuntime {
+        fail_apply: Mutex::new(false),
+    });
+    let sink = Arc::new(RecordingSink::default());
+
+    Controller::new(settings.clone(), themes, runtime, sink).unwrap();
+
+    let stored = settings.load().unwrap();
+    assert_eq!(stored.active_theme_id.as_deref(), Some("eva-warm-cream"));
+    assert!(!stored.theme_enabled);
+}
+
 struct ControllerEnvironment {
     _dir: tempfile::TempDir,
     settings: SettingsStore,

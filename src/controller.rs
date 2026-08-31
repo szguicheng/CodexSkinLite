@@ -57,7 +57,14 @@ impl Controller {
         runtime: Arc<dyn RendererRuntime>,
         sink: Arc<dyn UiSink>,
     ) -> anyhow::Result<Self> {
-        let settings = settings_store.load()?;
+        let mut settings = settings_store.load()?;
+        if settings.active_theme_id.is_none() {
+            let themes = theme_store.list()?;
+            if themes.len() == 1 {
+                settings.active_theme_id = Some(themes[0].id.clone());
+                settings_store.save(&settings)?;
+            }
+        }
         let controller = Self {
             settings_store,
             theme_store,
@@ -87,7 +94,11 @@ impl Controller {
             }
             AppCommand::ImportTheme(path) => {
                 let bytes = std::fs::read(path)?;
-                self.theme_store.import_zip_bytes(&bytes)?;
+                let imported = self.theme_store.import_zip_bytes(&bytes)?;
+                if self.settings.active_theme_id.is_none() {
+                    self.settings.active_theme_id = Some(imported.id);
+                    self.settings_store.save(&self.settings)?;
+                }
                 self.publish();
             }
             AppCommand::ActivateTheme(id) => {

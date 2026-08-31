@@ -19,9 +19,8 @@ pub(super) fn show(
     state: &Arc<AppKitState>,
     slot: &RefCell<Option<Retained<NSWindow>>>,
 ) {
-    if let Some(window) = slot.borrow().as_ref() {
-        window.makeKeyAndOrderFront(None);
-        return;
+    if let Some(window) = slot.borrow_mut().take() {
+        window.close();
     }
     let snapshot = state.snapshot();
     let rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(520.0, 430.0));
@@ -91,6 +90,23 @@ pub(super) fn show(
         sel!(importTheme:),
         mtm,
     );
+    if snapshot.as_ref().is_some_and(|value| {
+        matches!(
+            value.connection,
+            crate::model::ConnectionState::RestartRequired
+        )
+    }) {
+        add_button(
+            &content,
+            "确认重启",
+            425.0,
+            85.0,
+            85.0,
+            target,
+            sel!(confirmRestart:),
+            mtm,
+        );
+    }
 
     add_label(&content, "布局", 24.0, 285.0, 470.0, 24.0, mtm);
     let centered = unsafe {

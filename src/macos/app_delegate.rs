@@ -37,6 +37,11 @@ define_class!(
             let _ = self.ivars().controller.send(AppCommand::Reconnect);
         }
 
+        #[unsafe(method(confirmRestart:))]
+        fn confirm_restart(&self, _sender: Option<&AnyObject>) {
+            let _ = self.ivars().controller.send(AppCommand::ConfirmRestart);
+        }
+
         #[unsafe(method(openSettings:))]
         fn open_settings(&self, _sender: Option<&AnyObject>) {
             let mtm = MainThreadMarker::from(self);
@@ -141,7 +146,12 @@ impl ActionTarget {
 pub(super) fn run(controller: ControllerHandle, state: Arc<AppKitState>) -> ! {
     let mtm = MainThreadMarker::new().expect("AppKit must run on the main thread");
     let app = NSApplication::sharedApplication(mtm);
-    app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+    let open_settings = std::env::var_os("CODEX_SKIN_LITE_OPEN_SETTINGS").is_some();
+    app.setActivationPolicy(if open_settings {
+        NSApplicationActivationPolicy::Regular
+    } else {
+        NSApplicationActivationPolicy::Accessory
+    });
     let target = ActionTarget::new(controller, state);
     let status_item =
         NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
@@ -151,6 +161,14 @@ pub(super) fn run(controller: ControllerHandle, state: Arc<AppKitState>) -> ! {
     }
     let menu = menu::build_menu(mtm, &target);
     status_item.setMenu(Some(&menu));
+    if open_settings {
+        settings_window::show(
+            mtm,
+            &target,
+            &target.ivars().state,
+            &target.ivars().settings_window,
+        );
+    }
     let _keep_alive: (Retained<ActionTarget>, Retained<NSStatusItem>) = (target, status_item);
     app.finishLaunching();
     app.run();

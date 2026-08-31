@@ -3,6 +3,7 @@ fn main() -> anyhow::Result<()> {
         anyhow::bail!("CodexSkinLite supports only macOS Apple Silicon");
     }
     let paths = codex_skin_lite::paths::AppPaths::discover()?;
+    let _diagnostics = codex_skin_lite::diagnostics::init_local_logging(&paths)?;
     let state = std::sync::Arc::new(codex_skin_lite::macos::AppKitState::default());
     let sink = std::sync::Arc::new(codex_skin_lite::macos::AppKitSink::new(state.clone()));
     let controller = codex_skin_lite::controller::Controller::new(

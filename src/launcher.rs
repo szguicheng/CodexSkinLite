@@ -116,8 +116,11 @@ pub fn validate_codex_bundle(app: &Path) -> anyhow::Result<()> {
     if app.extension().and_then(|value| value.to_str()) != Some("app") || !app.is_dir() {
         anyhow::bail!("Codex path is not an application bundle");
     }
-    let executable = app.join("Contents/MacOS/Codex");
-    if !executable.is_file() {
+    let macos = app.join("Contents/MacOS");
+    if ![macos.join("Codex"), macos.join("ChatGPT")]
+        .iter()
+        .any(|executable| executable.is_file())
+    {
         anyhow::bail!("Codex bundle executable is missing");
     }
     Ok(())
