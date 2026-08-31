@@ -1,15 +1,17 @@
 # CodexSkinLite Manual Acceptance — 2026-08-31
 
-Status: follow-up working-tree fix awaiting user retest; no replacement ZIP has been built yet
+Status: follow-up build awaiting user retest
 
 ## Candidate
 
-- Source baseline: `c93ab53` plus the current uncommitted follow-up changes
+- Source fix commit: `62fd249`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: not rebuilt for this follow-up
+- ZIP: `dist/CodexSkinLite-0.1.2-macos-arm64.zip`
+- ZIP bytes: 1,430,892
+- SHA-256: `d887b58b7b4d2023e26f30d013a6c539bdbab7af0afaa8caf8c7e9852717fc24`
 - Renderer bytes: 19,216
 - Renderer timers: 0
 - Automated Rust tests: 36 non-ignored tests passed
