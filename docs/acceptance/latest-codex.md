@@ -1,36 +1,37 @@
 # CodexSkinLite Manual Acceptance — 2026-08-31
 
-Status: awaiting user retest of the 0.1.1 connection fix
+Status: awaiting user retest of the 0.1.2 current-layout fix
 
 ## Candidate
 
-- Source commit: `dd3aeaf`
+- Source commit: `027a461`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: `dist/CodexSkinLite-0.1.1-macos-arm64.zip`
-- ZIP bytes: 1,428,594
-- SHA-256: `9f136ac0670f6ef13feb6c27fc3d78a7635e4ad8d0b9d8bad79163d2061a65e5`
-- Renderer bytes: 14,927
+- ZIP: `dist/CodexSkinLite-0.1.2-macos-arm64.zip`
+- ZIP bytes: 1,430,110
+- SHA-256: `380f7ea8fce5ce25992c862632555fd10316ab758cb8d54919a0be57227f004e`
+- Renderer bytes: 20,148
 - Renderer timers: 0
 - Automated Rust tests: 33 passed
-- Automated renderer tests: 12 passed, including 20 repeated regression runs during development
-- Live current-Codex CDP probes: DOM discovery, 777px width injection, and EVA theme injection all passed with cleanup
+- Automated renderer tests: 19 passed
+- Live current-Codex CDP probes: DOM discovery plus combined 777px width, EVA theme, composer docking, transparent title surface, and settled-render checks all passed with cleanup
 
-## 0.1.1 repaired root causes
+## 0.1.2 repaired root causes
 
-- Accept current `title=ChatGPT, url=app://-/index.html` as the main Codex renderer.
-- Reject the separate `avatar-overlay` target and prefer the exact main page.
-- Make renderer `apply()` return its revision synchronously instead of returning a Promise that CDP decoded as `null`.
-- Push controller snapshots into the open settings window so `Connected`, `RestartRequired`, and compatibility errors are visible immediately.
-- Convert command failures into visible `CompatibilityWarning(...)` state instead of silently retaining `Disconnected`.
+- Move the current `[data-thread-scroll-footer]` out of the blurred scroll container and anchor it to the shrinkable main-content viewport while a theme is active; cleanup restores its exact native parent, attributes, and inline styles.
+- Apply centered width to `[data-pip-obstacle="thread-footer"]`, not the inner composer surface, so conversation and input use the same coordinate space.
+- Treat the modern `data-app-shell-tabs` and `data-browser-sidebar-webview*` layers as right-panel surfaces for both available-width calculation and theme mapping.
+- Make the current title toolbar's direct native white surface transparent only while a theme is active.
+- Keep stable `ResizeObserver` subscriptions and ignore ordinary message class churn, preventing the renderer from repeatedly rescanning an unchanged layout.
+- Upgrade the injected runtime API to version 2 so Reconnect replaces an already-loaded 0.1.1 runtime without requiring a Codex restart.
 
 ## Test preparation
 
 1. Finish or save current Codex work because one test restarts the official app.
 2. Quit Codex++ completely and disable the previous user blur script. The comparison must contain only CodexSkinLite.
-3. Extract `CodexSkinLite-0.1.1-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
+3. Extract `CodexSkinLite-0.1.2-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
 4. Because this build is unsigned, use Finder’s Open action if macOS blocks the first launch.
 5. Confirm Settings shows `/Applications/ChatGPT.app` as the Codex path.
 
