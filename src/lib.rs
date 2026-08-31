@@ -5,5 +5,6 @@ pub mod cdp;
 pub mod launcher;
 pub mod model;
 pub mod paths;
+pub mod renderer;
 pub mod settings;
 pub mod theme;
