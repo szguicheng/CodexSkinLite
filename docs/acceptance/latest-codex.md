@@ -4,15 +4,15 @@ Status: follow-up build awaiting user retest
 
 ## Candidate
 
-- Source fix commit: `62fd249`
+- Source fix commit: `1864bb0`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
 - ZIP: `dist/CodexSkinLite-0.1.2-macos-arm64.zip`
-- ZIP bytes: 1,430,892
-- SHA-256: `d887b58b7b4d2023e26f30d013a6c539bdbab7af0afaa8caf8c7e9852717fc24`
-- Renderer bytes: 19,216
+- ZIP bytes: 1,431,510
+- SHA-256: `373096941db736813e06092bad721a318701b822e3a6f89451ec072430373e50`
+- Renderer bytes: 22,305
 - Renderer timers: 0
 - Automated Rust tests: 36 non-ignored tests passed
 - Automated renderer tests: 24 passed
@@ -26,7 +26,7 @@ Status: follow-up build awaiting user retest
 - Treat the modern `data-app-shell-tabs` and `data-browser-sidebar-webview*` layers as right-panel surfaces for both available-width calculation and theme mapping.
 - Make the current title toolbar's direct native white surface transparent only while a theme is active.
 - Keep stable `ResizeObserver` subscriptions and ignore ordinary message class churn, preventing the renderer from repeatedly rescanning an unchanged layout.
-- Upgrade the injected runtime API to version 3 and migrate stale footer state left by version 2.
+- Upgrade the injected runtime API to version 4 and migrate stale footer state left by versions 2 and 3.
 - Apply the persisted theme and centered-width settings immediately after every successful Open, Reconnect, or confirmed restart, retrying above a renderer revision retained across utility restarts.
 
 ## Test preparation
