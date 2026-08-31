@@ -277,15 +277,22 @@ The centered layout:
 
 ## 13. Composer Compatibility
 
-CodexSkinLite prefers the native Codex composer layout and does not move React-managed DOM by default.
+CodexSkinLite always keeps the React-managed Codex composer footer in the active
+thread scroll container. It does not reparent the footer or impose a second
+fixed-position copy, because changing the parent of React-owned DOM can leave a
+stale composer behind during route transitions.
 
-A reversible composer adapter activates only when all of these are true:
+At bootstrap and on relevant layout mutations, the runtime resolves the active
+thread scroll surface using the stable Codex anchor and visibility state. If
+that surface contains a footer, it retains the first active footer and removes
+only duplicate footer nodes within the same main surface. If the active route
+cannot be resolved unambiguously, the runtime fails closed and leaves the DOM
+untouched until the next layout update.
 
-- The current Codex structure matches a known incompatible layout.
-- Theme presentation causes the composer to participate in thread scrolling or overlap an active side panel.
-- The expected source, destination, and restoration anchors are present.
-
-The adapter records the original parent, sibling position, and owned inline styles before any change. Failure at any point restores the original structure immediately. Unknown layouts fail closed and report degraded compatibility instead of guessing.
+When replacing a runtime from an older version, the new bootstrap first runs
+the previous cleanup, then removes an older marked footer only when a different
+active native footer is present. This migration is limited to the current main
+surface and does not alter unrelated composer or route nodes.
 
 ## 14. Live Update Data Flows
 
@@ -378,7 +385,8 @@ Performance measurements are release gates, not best-effort observations. A miss
 - Centered-width enable, update, side-panel alignment, and disable restoration.
 - Mutation coalescing.
 - Scroll, caret, and message-text mutations do not schedule full scans.
-- Composer adapter activation, failure rollback, and cleanup.
+- Native footer containment, route replacement, duplicate-footer cleanup, and
+  older-runtime migration.
 
 ### Real Codex acceptance matrix
 

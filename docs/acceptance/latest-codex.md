@@ -1,31 +1,31 @@
 # CodexSkinLite Manual Acceptance — 2026-08-31
 
-Status: awaiting user retest of the 0.1.2 current-layout fix
+Status: follow-up working-tree fix awaiting user retest; no replacement ZIP has been built yet
 
 ## Candidate
 
-- Source commit: `027a461`
+- Source baseline: `c93ab53` plus the current uncommitted follow-up changes
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: `dist/CodexSkinLite-0.1.2-macos-arm64.zip`
-- ZIP bytes: 1,430,110
-- SHA-256: `380f7ea8fce5ce25992c862632555fd10316ab758cb8d54919a0be57227f004e`
-- Renderer bytes: 20,148
+- ZIP: not rebuilt for this follow-up
+- Renderer bytes: 19,216
 - Renderer timers: 0
-- Automated Rust tests: 33 passed
-- Automated renderer tests: 19 passed
-- Live current-Codex CDP probes: DOM discovery plus combined 777px width, EVA theme, composer docking, transparent title surface, and settled-render checks all passed with cleanup
+- Automated Rust tests: 36 non-ignored tests passed
+- Automated renderer tests: 24 passed
+- Live current-Codex CDP probes: theme and centered-width mutation tests passed against the current 9222 page; the main active thread reported one footer/composer in the native scroll surface, while a separate right-panel thread remained untouched
 
-## 0.1.2 repaired root causes
+## Follow-up working-tree repaired root causes
 
-- Move the current `[data-thread-scroll-footer]` out of the blurred scroll container and anchor it to the shrinkable main-content viewport while a theme is active; cleanup restores its exact native parent, attributes, and inline styles.
+- Never reparent the React-managed `[data-thread-scroll-footer]`; keep the native footer and composer in the active thread scroll container.
+- Remove duplicate footer nodes during bootstrap and relevant route/layout reconciliation, while failing closed when retained routes are ambiguous.
 - Apply centered width to `[data-pip-obstacle="thread-footer"]`, not the inner composer surface, so conversation and input use the same coordinate space.
 - Treat the modern `data-app-shell-tabs` and `data-browser-sidebar-webview*` layers as right-panel surfaces for both available-width calculation and theme mapping.
 - Make the current title toolbar's direct native white surface transparent only while a theme is active.
 - Keep stable `ResizeObserver` subscriptions and ignore ordinary message class churn, preventing the renderer from repeatedly rescanning an unchanged layout.
-- Upgrade the injected runtime API to version 2 so Reconnect replaces an already-loaded 0.1.1 runtime without requiring a Codex restart.
+- Upgrade the injected runtime API to version 3 and migrate stale footer state left by version 2.
+- Apply the persisted theme and centered-width settings immediately after every successful Open, Reconnect, or confirmed restart, retrying above a renderer revision retained across utility restarts.
 
 ## Test preparation
 

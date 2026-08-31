@@ -92,14 +92,23 @@ impl Controller {
         match command {
             AppCommand::OpenCodex => {
                 self.connection = self.runtime.open(&self.settings).await?;
+                if matches!(self.connection, ConnectionState::Connected) {
+                    self.apply_saved_settings().await?;
+                }
                 self.publish();
             }
             AppCommand::ConfirmRestart => {
                 self.connection = self.runtime.confirmed_restart(&self.settings).await?;
+                if matches!(self.connection, ConnectionState::Connected) {
+                    self.apply_saved_settings().await?;
+                }
                 self.publish();
             }
             AppCommand::Reconnect => {
                 self.connection = self.runtime.reconnect(&self.settings).await?;
+                if matches!(self.connection, ConnectionState::Connected) {
+                    self.apply_saved_settings().await?;
+                }
                 self.publish();
             }
             AppCommand::ImportTheme(path) => {
@@ -168,6 +177,26 @@ impl Controller {
             conversation_centered: settings.conversation_centered,
             conversation_max_width: settings.conversation_max_width,
         })
+    }
+
+    async fn apply_saved_settings(&mut self) -> anyhow::Result<()> {
+        let mut expected_revision = self.revision.saturating_add(1);
+        for attempt in 0..2 {
+            self.revision = expected_revision;
+            let payload = self.payload(&self.settings, expected_revision)?;
+            let acknowledged_revision = self.runtime.apply(&payload).await?;
+            if acknowledged_revision == expected_revision {
+                return Ok(());
+            }
+            if acknowledged_revision > expected_revision && attempt == 0 {
+                expected_revision = acknowledged_revision.saturating_add(1);
+                continue;
+            }
+            anyhow::bail!(
+                "renderer acknowledged stale revision {acknowledged_revision}; expected {expected_revision}"
+            );
+        }
+        unreachable!("saved settings application has a bounded retry")
     }
 
     async fn apply_candidate(&mut self, candidate: AppSettings) -> anyhow::Result<()> {

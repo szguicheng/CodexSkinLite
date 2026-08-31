@@ -113,16 +113,26 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .await
         .unwrap();
     assert_eq!(status["revision"], 987655);
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     let applied = session
         .evaluate(
             r#"(() => {
-              const footer = document.querySelector('[data-thread-scroll-footer]');
+              const main = document.querySelector('main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]');
+              const thread = main?.querySelector('.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container');
+              const footers = [...(thread?.querySelectorAll('[data-thread-scroll-footer]') || [])];
+              const composers = [...(thread?.querySelectorAll('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome') || [])];
+              const footer = footers[0];
+              const composer = composers[0];
               const titleSurface = document.querySelector('[data-csl-header-title-surface="true"]');
               return JSON.stringify({
                 apiVersion: window.__CODEX_SKIN_LITE__?.apiVersion,
                 style: !!document.querySelector('#codex-skin-lite-theme'),
-                main: !!document.querySelector('[data-ds-part="main"]'),
+                main: !!main && main.getAttribute('data-ds-part') === 'main',
                 image: document.documentElement.style.getPropertyValue('--ds-theme-background-image').startsWith('url("blob:'),
+                footerCount: footers.length,
+                composerCount: composers.length,
+                footerInThread: !!footer && !!thread && thread.contains(footer),
+                composerInsideThread: !!composer && !!thread && thread.contains(composer),
                 footerDocked: footer?.dataset.cslComposerDock === 'true' && footer.parentElement?.hasAttribute('data-app-shell-main-content-layout'),
                 footerWidth: footer?.querySelector('[data-pip-obstacle="thread-footer"]')?.style.maxWidth,
                 titleTransparent: !!titleSurface && getComputedStyle(titleSurface).backgroundColor === 'rgba(0, 0, 0, 0)'
@@ -133,7 +143,7 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .unwrap();
     assert_eq!(
         applied.as_str().unwrap(),
-        r#"{"apiVersion":2,"style":true,"main":true,"image":true,"footerDocked":true,"footerWidth":"777px","titleTransparent":true}"#
+        r#"{"apiVersion":3,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerWidth":"777px","titleTransparent":true}"#
     );
     tokio::time::sleep(std::time::Duration::from_millis(750)).await;
     let settled = session
@@ -189,18 +199,31 @@ async fn probe_current_composer_and_header_geometry() {
               const thread = document.querySelector('.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container');
               const content = document.querySelector('[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]');
               const main = document.querySelector('main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]');
+              const footers = [...document.querySelectorAll('[data-thread-scroll-footer]')];
+              const composers = [...document.querySelectorAll('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome')];
               const titleText = [...document.querySelectorAll('header *')].find(node => node.children.length === 0 && node.textContent?.includes('修复 Claude EVA macOS 主题'));
               const chain = node => {
                 const result = [];
                 for (let current = node, i = 0; current && i < 9; current = current.parentElement, i += 1) result.push(describe(current));
                 return result;
               };
+              const threadSurfaces = [...document.querySelectorAll('.thread-scroll-container')].map(threadNode => ({
+                thread: describe(threadNode),
+                ancestors: chain(threadNode).slice(1, 6),
+                footerCount: threadNode.querySelectorAll('[data-thread-scroll-footer]').length,
+                composerCount: threadNode.querySelectorAll('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome').length
+              }));
               return JSON.stringify({
                 api: window.__CODEX_SKIN_LITE__?.status?.() || null,
+                footerCount: footers.length,
+                composerCount: composers.length,
+                dockedFooterCount: footers.filter(node => node.dataset.cslComposerDock === 'true').length,
+                footers: footers.map(node => ({ footer: describe(node), parent: describe(node.parentElement) })),
                 composerInsideThread: !!(thread && composer && thread.contains(composer)),
                 main: describe(main),
                 thread: describe(thread),
                 content: describe(content),
+                threadSurfaces,
                 sidebars: [...document.querySelectorAll('.app-shell-left-panel, [data-app-shell-right-panel], [data-context-panel], aside[class*="_RightPanel_"], [data-app-shell-tabs="true"], [data-browser-sidebar-webview-host-root], [data-browser-sidebar-webview]')].map(describe),
                 composerChain: chain(composer),
                 titleChain: chain(titleText)

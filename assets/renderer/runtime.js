@@ -1,10 +1,61 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 2;
+  const API_VERSION = 3;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
+  const MAIN_SELECTOR =
+    'main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]';
+  const THREAD_SCROLL_SELECTOR =
+    ".thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container";
+  const isHidden = (node) =>
+    node.hidden ||
+    node.getAttribute("aria-hidden") === "true" ||
+    Boolean(node.closest("[hidden], [aria-hidden=\"true\"]")) ||
+    (typeof getComputedStyle === "function" &&
+      ["none", "hidden"].includes(getComputedStyle(node).display)) ||
+    (typeof getComputedStyle === "function" &&
+      getComputedStyle(node).visibility === "hidden");
+  const findActiveScroll = (main) => {
+    if (!main) return null;
+    const candidates = [...main.querySelectorAll(THREAD_SCROLL_SELECTOR)];
+    const visible = candidates.filter((node) => !isHidden(node));
+    const anchored = visible.filter(
+      (node) => node.getAttribute("data-pip-anchor-host") === "codex-main-thread",
+    );
+    if (anchored.length === 1) return anchored[0];
+    if (anchored.length > 1 || visible.length > 1) return null;
+    return visible[0] || null;
+  };
+  const reconcileComposerFooters = (main, scroll) => {
+    if (!main || !scroll) return false;
+    const activeFooters = [...scroll.querySelectorAll("[data-thread-scroll-footer]")];
+    if (!activeFooters.length) return false;
+    const activeFooter = activeFooters[0];
+    let changed = false;
+    for (const footer of main.querySelectorAll("[data-thread-scroll-footer]")) {
+      if (footer !== activeFooter) {
+        footer.remove();
+        changed = true;
+      }
+    }
+    return changed;
+  };
+  const legacyDockedNodes = [
+    ...document.querySelectorAll('[data-csl-composer-dock="true"]'),
+  ];
   existing?.cleanup?.();
+
+  for (const node of legacyDockedNodes) {
+    const main = node.closest(MAIN_SELECTOR) || document.querySelector(MAIN_SELECTOR);
+    const hasOtherFooter = [...(main?.querySelectorAll("[data-thread-scroll-footer]") || [])].some(
+      (footer) => footer !== node,
+    );
+    if (hasOtherFooter) node.remove();
+  }
+  for (const main of document.querySelectorAll(MAIN_SELECTOR)) {
+    reconcileComposerFooters(main, findActiveScroll(main));
+  }
 
   const state = {
     revision: 0,
@@ -21,14 +72,6 @@
     widthElements: new Set(),
     widthOriginals: new WeakMap(),
     widthHadStyle: new WeakMap(),
-    composerDock: {
-      node: null,
-      scroll: null,
-      parent: null,
-      nextSibling: null,
-      attribute: null,
-      styles: null,
-    },
     metrics: {
       layoutPasses: 0,
       fullScans: 0,
@@ -87,9 +130,7 @@
       if (node) desired.set(node, part);
     };
     remember(document.documentElement, "root");
-    const main = document.querySelector(
-      'main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]',
-    );
+    const main = document.querySelector(MAIN_SELECTOR);
     remember(main, "main");
     for (const node of queryAll(
       document,
@@ -109,9 +150,7 @@
     remember(home, "home");
     remember(home?.querySelector("[data-testid='home-icon']"), "home-hero");
     remember(home?.querySelector("[data-feature='game-source']"), "project-list");
-    const thread = main?.querySelector(
-      '.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container',
-    );
+    const thread = findActiveScroll(main);
     remember(thread, "thread");
     for (const node of queryAll(
       main || document,
@@ -247,20 +286,18 @@
   };
 
   const findLayout = () => {
-    const main = document.querySelector(
-      'main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]',
-    );
-    const scroll = main?.querySelector(
-      ".thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container",
-    );
-    const trackedFooter = state.composerDock.node;
+    const main = document.querySelector(MAIN_SELECTOR);
+    const scrollCandidates = main ? [...main.querySelectorAll(THREAD_SCROLL_SELECTOR)] : [];
+    const scroll = findActiveScroll(main);
     const footer =
-      (trackedFooter?.isConnected && trackedFooter) ||
       scroll?.querySelector("[data-thread-scroll-footer]") ||
-      main?.querySelector("[data-thread-scroll-footer]");
-    const composerSurface = main?.querySelector(
+      (scrollCandidates.length === 0 ? main?.querySelector("[data-thread-scroll-footer]") : null);
+    const routeAmbiguous = scrollCandidates.length > 0 && !scroll;
+    const composerSurface = routeAmbiguous
+      ? null
+      : main?.querySelector(
       '[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome',
-    );
+        );
     const composer =
       footer?.querySelector('[data-pip-obstacle="thread-footer"]') ||
       composerSurface?.closest('[data-pip-obstacle="thread-footer"]') ||
@@ -273,103 +310,14 @@
       main,
       scroll,
       footer,
-      dock:
-        scroll?.closest(
-          '[data-app-shell-main-content-layout], [data-ds-thread-surface="true"]',
-        ) || main,
-      content: main?.querySelector(
-        '[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]',
-      ),
+      content: routeAmbiguous
+        ? null
+        : main?.querySelector(
+            '[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]',
+          ),
       composer,
       sidebars: queryAll(document, SIDEBAR_SELECTOR),
     };
-  };
-
-  const COMPOSER_DOCK_PROPERTIES = [
-    "position",
-    "top",
-    "right",
-    "bottom",
-    "left",
-    "width",
-    "z-index",
-  ];
-
-  const restoreComposerDock = () => {
-    const dock = state.composerDock;
-    const node = dock.node;
-    if (!node) return;
-    if (dock.parent?.isConnected) {
-      if (dock.nextSibling?.parentElement === dock.parent) {
-        dock.parent.insertBefore(node, dock.nextSibling);
-      } else {
-        dock.parent.append(node);
-      }
-    }
-    for (const [property, original] of dock.styles || []) {
-      if (original.value) {
-        node.style.setProperty(property, original.value, original.priority);
-      } else {
-        node.style.removeProperty(property);
-      }
-    }
-    if (dock.attribute === null) node.removeAttribute("data-csl-composer-dock");
-    else node.setAttribute("data-csl-composer-dock", dock.attribute);
-    Object.assign(dock, {
-      node: null,
-      scroll: null,
-      parent: null,
-      nextSibling: null,
-      attribute: null,
-      styles: null,
-    });
-  };
-
-  const syncComposerDocking = (layout, enabled) => {
-    const current = state.composerDock;
-    const footer = layout.footer;
-    const shouldDock =
-      enabled &&
-      footer &&
-      layout.scroll &&
-      layout.dock &&
-      (footer.parentElement === layout.scroll || footer === current.node);
-    if (!shouldDock) {
-      restoreComposerDock();
-      return;
-    }
-    if (current.node && (current.node !== footer || current.scroll !== layout.scroll)) {
-      restoreComposerDock();
-    }
-    if (!state.composerDock.node) {
-      state.composerDock.node = footer;
-      state.composerDock.scroll = layout.scroll;
-      state.composerDock.parent = footer.parentElement;
-      state.composerDock.nextSibling = footer.nextSibling;
-      state.composerDock.attribute = footer.getAttribute("data-csl-composer-dock");
-      state.composerDock.styles = new Map(
-        COMPOSER_DOCK_PROPERTIES.map((property) => [
-          property,
-          {
-            value: footer.style.getPropertyValue(property),
-            priority: footer.style.getPropertyPriority(property),
-          },
-        ]),
-      );
-    }
-    if (footer.parentElement !== layout.dock) layout.dock.append(footer);
-    footer.setAttribute("data-csl-composer-dock", "true");
-    for (const [property, value] of Object.entries({
-      position: "absolute",
-      top: "auto",
-      right: "0px",
-      bottom: "0px",
-      left: "0px",
-      width: "auto",
-      "z-index": "10",
-    })) {
-      footer.style.setProperty(property, value, "important");
-    }
   };
 
   const mutationAffectsLayout = (record) => {
@@ -538,8 +486,9 @@
     const payload = state.payload || {};
     let layout = findLayout();
     state.metrics.layoutPasses += 1;
-    syncComposerDocking(layout, Boolean(payload.themeEnabled && payload.theme));
-    layout = findLayout();
+    if (reconcileComposerFooters(layout.main, layout.scroll)) {
+      layout = findLayout();
+    }
     if (payload.themeEnabled && payload.theme) {
       state.metrics.fullScans += 1;
       markParts();
@@ -582,7 +531,6 @@
   const cleanup = () => {
     disconnectObservers();
     clearCenteredWidth();
-    restoreComposerDock();
     clearTheme();
     clearParts();
     state.payload = null;

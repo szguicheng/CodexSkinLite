@@ -48,6 +48,61 @@ async fn width_persists_only_after_renderer_verification() {
 }
 
 #[tokio::test]
+async fn opening_codex_applies_saved_settings_to_renderer() {
+    let mut env = controller_environment(false);
+
+    env.controller.handle(AppCommand::OpenCodex).await.unwrap();
+
+    let applied = env.applied_payloads.lock().unwrap();
+    assert_eq!(applied.len(), 1);
+    assert!(applied[0].theme_enabled);
+    assert_eq!(
+        applied[0].theme.as_ref().map(|theme| theme.id.as_str()),
+        Some("eva-warm-cream")
+    );
+    assert!(applied[0].conversation_centered);
+    assert_eq!(applied[0].conversation_max_width, 777);
+}
+
+#[tokio::test]
+async fn reconnect_resends_saved_settings_after_renderer_revision_survives_restart() {
+    let mut env = controller_environment(false);
+    *env.renderer_revision.lock().unwrap() = 50;
+
+    env.controller.handle(AppCommand::Reconnect).await.unwrap();
+
+    assert_eq!(*env.renderer_revision.lock().unwrap(), 51);
+    let applied = env.applied_payloads.lock().unwrap();
+    assert_eq!(applied.len(), 1);
+    assert_eq!(applied[0].revision, 51);
+    assert!(applied[0].theme_enabled);
+    assert!(applied[0].conversation_centered);
+    assert_eq!(applied[0].conversation_max_width, 777);
+}
+
+#[tokio::test]
+async fn every_successful_connection_path_applies_saved_settings() {
+    let mut env = controller_environment(false);
+
+    for command in [
+        AppCommand::OpenCodex,
+        AppCommand::Reconnect,
+        AppCommand::ConfirmRestart,
+    ] {
+        env.controller.handle(command).await.unwrap();
+    }
+
+    let applied = env.applied_payloads.lock().unwrap();
+    assert_eq!(applied.len(), 3);
+    assert!(applied.iter().all(|payload| {
+        payload.theme_enabled
+            && payload.conversation_centered
+            && payload.conversation_max_width == 777
+            && payload.theme.as_ref().map(|theme| theme.id.as_str()) == Some("eva-warm-cream")
+    }));
+}
+
+#[tokio::test]
 async fn first_import_selects_theme_without_enabling_it() {
     let dir = tempfile::tempdir().unwrap();
     let paths = AppPaths::for_test(dir.path());
@@ -55,6 +110,8 @@ async fn first_import_selects_theme_without_enabling_it() {
     let themes = ThemeStore::new(paths);
     let runtime = Arc::new(FakeRuntime {
         fail_apply: Mutex::new(false),
+        applied_payloads: Arc::new(Mutex::new(Vec::new())),
+        renderer_revision: Arc::new(Mutex::new(0)),
     });
     let sink = Arc::new(RecordingSink::default());
     let mut controller = Controller::new(settings.clone(), themes, runtime, sink).unwrap();
@@ -82,6 +139,8 @@ fn startup_selects_the_only_imported_theme_when_settings_are_empty() {
         .unwrap();
     let runtime = Arc::new(FakeRuntime {
         fail_apply: Mutex::new(false),
+        applied_payloads: Arc::new(Mutex::new(Vec::new())),
+        renderer_revision: Arc::new(Mutex::new(0)),
     });
     let sink = Arc::new(RecordingSink::default());
 
@@ -97,6 +156,8 @@ struct ControllerEnvironment {
     settings: SettingsStore,
     controller: Controller,
     sink: Arc<RecordingSink>,
+    applied_payloads: Arc<Mutex<Vec<RendererPayload>>>,
+    renderer_revision: Arc<Mutex<u64>>,
 }
 
 fn controller_environment(fail_apply: bool) -> ControllerEnvironment {
@@ -117,11 +178,17 @@ fn controller_environment(fail_apply: bool) -> ControllerEnvironment {
         .save(&AppSettings {
             theme_enabled: true,
             active_theme_id: Some("eva-warm-cream".into()),
+            conversation_centered: true,
+            conversation_max_width: 777,
             ..AppSettings::default()
         })
         .unwrap();
+    let applied_payloads = Arc::new(Mutex::new(Vec::new()));
+    let renderer_revision = Arc::new(Mutex::new(0));
     let runtime = Arc::new(FakeRuntime {
         fail_apply: Mutex::new(fail_apply),
+        applied_payloads: applied_payloads.clone(),
+        renderer_revision: renderer_revision.clone(),
     });
     let sink = Arc::new(RecordingSink::default());
     let controller = Controller::new(settings.clone(), themes, runtime, sink.clone()).unwrap();
@@ -130,11 +197,15 @@ fn controller_environment(fail_apply: bool) -> ControllerEnvironment {
         settings,
         controller,
         sink,
+        applied_payloads,
+        renderer_revision,
     }
 }
 
 struct FakeRuntime {
     fail_apply: Mutex<bool>,
+    applied_payloads: Arc<Mutex<Vec<RendererPayload>>>,
+    renderer_revision: Arc<Mutex<u64>>,
 }
 
 impl RendererRuntime for FakeRuntime {
@@ -143,7 +214,13 @@ impl RendererRuntime for FakeRuntime {
             if std::mem::take(&mut *self.fail_apply.lock().unwrap()) {
                 anyhow::bail!("injected failure");
             }
-            Ok(payload.revision)
+            let mut renderer_revision = self.renderer_revision.lock().unwrap();
+            if payload.revision <= *renderer_revision {
+                return Ok(*renderer_revision);
+            }
+            *renderer_revision = payload.revision;
+            self.applied_payloads.lock().unwrap().push(payload.clone());
+            Ok(*renderer_revision)
         })
     }
 

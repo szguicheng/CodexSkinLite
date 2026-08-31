@@ -198,25 +198,135 @@ describe("Skin API", () => {
 });
 
 describe("composer regressions", () => {
-  it("docks a themed scrolling footer and restores its original parent", () => {
+  it("keeps a themed footer in Codex's native scrolling container", () => {
     const window = installRuntime({ fixture: "modernScrollingComposer" });
     const scroll = window.document.querySelector(".thread-scroll-container");
-    const viewport = window.document.querySelector(
-      "[data-app-shell-main-content-layout]",
-    );
     const footer = window.document.querySelector("[data-thread-scroll-footer]");
     expect(footer.parentElement).toBe(scroll);
 
     window.__CODEX_SKIN_LITE__.apply(evaPayload());
 
-    expect(footer.parentElement).toBe(viewport);
-    expect(footer.dataset.cslComposerDock).toBe("true");
-    expect(footer.style.position).toBe("absolute");
-    expect(footer.style.bottom).toBe("0px");
+    expect(footer.parentElement).toBe(scroll);
+    expect(footer.hasAttribute("data-csl-composer-dock")).toBe(false);
 
     window.__CODEX_SKIN_LITE__.cleanup();
     expect(footer.parentElement).toBe(scroll);
     expect(footer.hasAttribute("data-csl-composer-dock")).toBe(false);
+  });
+
+  it("removes the old footer when a chat route mounts a replacement footer", async () => {
+    const window = installRuntime({ fixture: "modernScrollingComposer" });
+    const scroll = window.document.querySelector(".thread-scroll-container");
+    const originalFooter = window.document.querySelector(
+      "[data-thread-scroll-footer]",
+    );
+    const replacementFooter = originalFooter.cloneNode(true);
+    const viewport = window.document.querySelector(
+      "[data-app-shell-main-content-layout]",
+    );
+
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+    viewport.append(originalFooter);
+    scroll.append(replacementFooter);
+    await nextFrame(window);
+
+    expect(window.document.querySelectorAll("[data-thread-scroll-footer]")).toHaveLength(1);
+    expect(replacementFooter.parentElement).toBe(scroll);
+    expect(originalFooter.isConnected).toBe(false);
+  });
+
+  it("removes a stale footer left by the previous docking runtime", () => {
+    let legacyFooter;
+    let originalParent;
+    const window = installRuntime({
+      fixture: "modernScrollingComposer",
+      preload(currentWindow) {
+        originalParent = currentWindow.document.querySelector(
+          ".thread-scroll-container",
+        );
+        legacyFooter = currentWindow.document
+          .querySelector("[data-thread-scroll-footer]")
+          .cloneNode(true);
+        legacyFooter.dataset.cslComposerDock = "true";
+        currentWindow.document
+          .querySelector("[data-app-shell-main-content-layout]")
+          .append(legacyFooter);
+        currentWindow.__CODEX_SKIN_LITE__ = {
+          apiVersion: 2,
+          cleanup() {
+            originalParent.append(legacyFooter);
+            delete legacyFooter.dataset.cslComposerDock;
+          },
+        };
+      },
+    });
+
+    expect(window.document.querySelectorAll("[data-thread-scroll-footer]")).toHaveLength(1);
+    expect(legacyFooter.isConnected).toBe(false);
+  });
+
+  it("deduplicates native footers left in the active scroll surface", () => {
+    const window = installRuntime({
+      fixture: "modernScrollingComposer",
+      preload(currentWindow) {
+        const scroll = currentWindow.document.querySelector(
+          ".thread-scroll-container",
+        );
+        const duplicate = scroll
+          .querySelector("[data-thread-scroll-footer]")
+          .cloneNode(true);
+        scroll.append(duplicate);
+        currentWindow.__CODEX_SKIN_LITE__ = {
+          apiVersion: 2,
+          cleanup() {},
+        };
+      },
+    });
+
+    expect(window.document.querySelectorAll("[data-thread-scroll-footer]")).toHaveLength(1);
+  });
+
+  it("removes an unmarked stale footer outside the active scroll surface", () => {
+    let staleFooter;
+    const window = installRuntime({
+      fixture: "modernScrollingComposer",
+      preload(currentWindow) {
+        const footer = currentWindow.document.querySelector(
+          "[data-thread-scroll-footer]",
+        );
+        staleFooter = footer.cloneNode(true);
+        currentWindow.document
+          .querySelector("[data-app-shell-main-content-layout]")
+          .append(staleFooter);
+        currentWindow.__CODEX_SKIN_LITE__ = {
+          apiVersion: 2,
+          cleanup() {},
+        };
+      },
+    });
+
+    expect(window.document.querySelectorAll("[data-thread-scroll-footer]")).toHaveLength(1);
+    expect(staleFooter.isConnected).toBe(false);
+  });
+
+  it("does not let a hidden retained route win footer discovery", () => {
+    const window = installRuntime({ fixture: "modernScrollingComposer" });
+    const main = window.document.querySelector("main");
+    const currentScroll = window.document.querySelector(".thread-scroll-container");
+    currentScroll.dataset.pipAnchorHost = "codex-main-thread";
+    const hiddenScroll = currentScroll.cloneNode(true);
+    const hiddenFooter = hiddenScroll.querySelector("[data-thread-scroll-footer]");
+    hiddenScroll.hidden = true;
+    main
+      .querySelector("[data-app-shell-main-content-layout]")
+      .insertBefore(hiddenScroll, currentScroll);
+
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+
+    expect(hiddenFooter.isConnected).toBe(false);
+    expect(hiddenScroll.isConnected).toBe(true);
+    expect(currentScroll.dataset.dsThreadScroll).toBe("true");
+    expect(currentScroll.querySelector("[data-thread-scroll-footer]")).not.toBeNull();
   });
 
   it("applies centered width to the footer wrapper, not the inner composer", () => {

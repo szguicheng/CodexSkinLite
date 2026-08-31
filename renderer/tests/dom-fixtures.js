@@ -30,6 +30,7 @@ export function installRuntime(input) {
       window.__testBlobUrls.revoked.push(value);
     };
   }
+  options.preload?.(window);
   const source = fs.readFileSync(runtimePath, "utf8");
   window.eval(source);
   return window;
