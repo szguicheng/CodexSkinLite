@@ -198,20 +198,26 @@ describe("Skin API", () => {
 });
 
 describe("composer regressions", () => {
-  it("keeps a themed footer in Codex's native scrolling container", () => {
-    const window = installRuntime({ fixture: "modernScrollingComposer" });
+  it("keeps a themed footer fixed inside Codex's native scrolling container", () => {
+    const window = installRuntime({ fixture: "modernScrollingComposerWithRightPanel" });
     const scroll = window.document.querySelector(".thread-scroll-container");
     const footer = window.document.querySelector("[data-thread-scroll-footer]");
+    const originalStyle = footer.getAttribute("style");
     expect(footer.parentElement).toBe(scroll);
 
     window.__CODEX_SKIN_LITE__.apply(evaPayload());
 
     expect(footer.parentElement).toBe(scroll);
     expect(footer.hasAttribute("data-csl-composer-dock")).toBe(false);
+    expect(footer.style.position).toBe("fixed");
+    expect(footer.style.bottom).toBe("0px");
+    expect(footer.style.left).toBe("0px");
+    expect(footer.style.right).not.toBe("");
 
     window.__CODEX_SKIN_LITE__.cleanup();
     expect(footer.parentElement).toBe(scroll);
     expect(footer.hasAttribute("data-csl-composer-dock")).toBe(false);
+    expect(footer.getAttribute("style")).toBe(originalStyle);
   });
 
   it("removes the old footer when a chat route mounts a replacement footer", async () => {

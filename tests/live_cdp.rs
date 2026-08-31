@@ -134,6 +134,7 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
                 footerInThread: !!footer && !!thread && thread.contains(footer),
                 composerInsideThread: !!composer && !!thread && thread.contains(composer),
                 footerDocked: footer?.dataset.cslComposerDock === 'true' && footer.parentElement?.hasAttribute('data-app-shell-main-content-layout'),
+                footerPosition: footer ? getComputedStyle(footer).position : null,
                 footerWidth: footer?.querySelector('[data-pip-obstacle="thread-footer"]')?.style.maxWidth,
                 titleTransparent: !!titleSurface && getComputedStyle(titleSurface).backgroundColor === 'rgba(0, 0, 0, 0)'
               });
@@ -143,7 +144,7 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .unwrap();
     assert_eq!(
         applied.as_str().unwrap(),
-        r#"{"apiVersion":3,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerWidth":"777px","titleTransparent":true}"#
+        r#"{"apiVersion":4,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerPosition":"fixed","footerWidth":"777px","titleTransparent":true}"#
     );
     tokio::time::sleep(std::time::Duration::from_millis(750)).await;
     let settled = session

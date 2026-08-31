@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 3;
+  const API_VERSION = 4;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -72,6 +72,11 @@
     widthElements: new Set(),
     widthOriginals: new WeakMap(),
     widthHadStyle: new WeakMap(),
+    composerPosition: {
+      node: null,
+      styles: null,
+      hadStyle: false,
+    },
     metrics: {
       layoutPasses: 0,
       fullScans: 0,
@@ -332,6 +337,98 @@
     );
   };
 
+  const FOOTER_POSITION_PROPERTIES = [
+    "position",
+    "top",
+    "right",
+    "bottom",
+    "left",
+    "width",
+    "z-index",
+  ];
+
+  const restoreComposerPosition = () => {
+    const current = state.composerPosition;
+    if (!current.node) return;
+    for (const [property, original] of current.styles || []) {
+      if (original.value) {
+        current.node.style.setProperty(property, original.value, original.priority);
+      } else {
+        current.node.style.removeProperty(property);
+      }
+    }
+    if (!current.hadStyle && !current.node.style.cssText) {
+      current.node.removeAttribute("style");
+    }
+    state.composerPosition = { node: null, styles: null, hadStyle: false };
+  };
+
+  const availableMainBounds = (layout) => {
+    const mainRect = layout.main?.getBoundingClientRect();
+    if (!mainRect || mainRect.width <= 0) return null;
+    let left = mainRect.left;
+    let right = mainRect.right;
+    for (const sidebar of layout.sidebars) {
+      const rect = sidebar.getBoundingClientRect();
+      const overlap =
+        Math.min(mainRect.right, rect.right) - Math.max(mainRect.left, rect.left);
+      if (overlap <= 0) continue;
+      if (rect.left <= mainRect.left && rect.right > left) {
+        left = Math.min(rect.right, mainRect.right);
+      } else if (rect.right >= mainRect.right && rect.left < right) {
+        right = Math.max(rect.left, mainRect.left);
+      }
+    }
+    const viewportWidth = Math.max(
+      document.documentElement?.clientWidth || 0,
+      window.innerWidth || 0,
+      mainRect.right,
+    );
+    return { left, right, viewportWidth };
+  };
+
+  const syncComposerPosition = (layout, enabled) => {
+    const footer = layout.footer;
+    if (!enabled || !footer || !layout.scroll) {
+      restoreComposerPosition();
+      return;
+    }
+    if (state.composerPosition.node && state.composerPosition.node !== footer) {
+      restoreComposerPosition();
+    }
+    if (!state.composerPosition.node) {
+      state.composerPosition = {
+        node: footer,
+        hadStyle: footer.hasAttribute("style"),
+        styles: new Map(
+          FOOTER_POSITION_PROPERTIES.map((property) => [
+            property,
+            {
+              value: footer.style.getPropertyValue(property),
+              priority: footer.style.getPropertyPriority(property),
+            },
+          ]),
+        ),
+      };
+    }
+    const bounds = availableMainBounds(layout);
+    if (!bounds) {
+      restoreComposerPosition();
+      return;
+    }
+    for (const [property, value] of Object.entries({
+      position: "fixed",
+      top: "auto",
+      right: `${Math.max(0, bounds.viewportWidth - bounds.right)}px`,
+      bottom: "0px",
+      left: `${Math.max(0, bounds.left)}px`,
+      width: "auto",
+      "z-index": "10",
+    })) {
+      footer.style.setProperty(property, value);
+    }
+  };
+
   const schedule = (reason) => {
     state.pendingReasons.add(reason);
     if (state.rafId) return;
@@ -489,6 +586,10 @@
     if (reconcileComposerFooters(layout.main, layout.scroll)) {
       layout = findLayout();
     }
+    syncComposerPosition(
+      layout,
+      Boolean((payload.themeEnabled && payload.theme) || payload.conversationCentered),
+    );
     if (payload.themeEnabled && payload.theme) {
       state.metrics.fullScans += 1;
       markParts();
@@ -531,6 +632,7 @@
   const cleanup = () => {
     disconnectObservers();
     clearCenteredWidth();
+    restoreComposerPosition();
     clearTheme();
     clearParts();
     state.payload = null;
