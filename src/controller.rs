@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::model::{AppSettings, AppSnapshot, ConnectionState};
+use crate::model::{AppSettings, AppSnapshot, ConnectionState, ThemeChoice};
 use crate::renderer::RendererPayload;
 use crate::settings::SettingsStore;
 use crate::theme::{ThemeStore, ThemeSummary};
@@ -174,17 +174,23 @@ impl Controller {
     }
 
     fn publish(&self) {
-        let active_theme_name = self
-            .theme_store
-            .list()
-            .unwrap_or_default()
+        let themes = self.theme_store.list().unwrap_or_default();
+        let active_theme_name = themes
+            .iter()
             .into_iter()
             .find(|theme| Some(theme.id.as_str()) == self.settings.active_theme_id.as_deref())
-            .map(|theme: ThemeSummary| theme.name);
+            .map(|theme| theme.name.clone());
         self.sink.publish(AppSnapshot {
             settings: self.settings.clone(),
             connection: self.connection.clone(),
             active_theme_name,
+            themes: themes
+                .into_iter()
+                .map(|theme: ThemeSummary| ThemeChoice {
+                    id: theme.id,
+                    name: theme.name,
+                })
+                .collect(),
         });
     }
 }

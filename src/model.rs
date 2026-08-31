@@ -39,4 +39,11 @@ pub struct AppSnapshot {
     pub settings: AppSettings,
     pub connection: ConnectionState,
     pub active_theme_name: Option<String>,
+    pub themes: Vec<ThemeChoice>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeChoice {
+    pub id: String,
+    pub name: String,
 }
