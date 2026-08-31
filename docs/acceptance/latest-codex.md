@@ -1,27 +1,36 @@
 # CodexSkinLite Manual Acceptance — 2026-08-31
 
-Status: awaiting user-run real Codex checks
+Status: awaiting user retest of the 0.1.1 connection fix
 
 ## Candidate
 
-- Source commit: `1b4dd59`
+- Source commit: `dd3aeaf`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: `dist/CodexSkinLite.app.zip`
-- ZIP bytes: 1,420,120
-- SHA-256: `c2025cd9fa13bd0b70937489478bef0e3efdaeb87764c32dd42b71daa5d5eb26`
-- Renderer bytes: 14,933
+- ZIP: `dist/CodexSkinLite-0.1.1-macos-arm64.zip`
+- ZIP bytes: 1,428,594
+- SHA-256: `9f136ac0670f6ef13feb6c27fc3d78a7635e4ad8d0b9d8bad79163d2061a65e5`
+- Renderer bytes: 14,927
 - Renderer timers: 0
-- Automated Rust tests: 29 passed
-- Automated renderer tests: 11 passed, including 20 repeated regression runs during development
+- Automated Rust tests: 33 passed
+- Automated renderer tests: 12 passed, including 20 repeated regression runs during development
+- Live current-Codex CDP probes: DOM discovery, 777px width injection, and EVA theme injection all passed with cleanup
+
+## 0.1.1 repaired root causes
+
+- Accept current `title=ChatGPT, url=app://-/index.html` as the main Codex renderer.
+- Reject the separate `avatar-overlay` target and prefer the exact main page.
+- Make renderer `apply()` return its revision synchronously instead of returning a Promise that CDP decoded as `null`.
+- Push controller snapshots into the open settings window so `Connected`, `RestartRequired`, and compatibility errors are visible immediately.
+- Convert command failures into visible `CompatibilityWarning(...)` state instead of silently retaining `Disconnected`.
 
 ## Test preparation
 
 1. Finish or save current Codex work because one test restarts the official app.
 2. Quit Codex++ completely and disable the previous user blur script. The comparison must contain only CodexSkinLite.
-3. Extract `CodexSkinLite.app.zip` and open `CodexSkinLite.app`.
+3. Extract `CodexSkinLite-0.1.1-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
 4. Because this build is unsigned, use Finder’s Open action if macOS blocks the first launch.
 5. Confirm Settings shows `/Applications/ChatGPT.app` as the Codex path.
 
