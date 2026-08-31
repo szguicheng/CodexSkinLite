@@ -58,12 +58,13 @@ async fn injects_centered_width_into_current_codex_and_cleans_up() {
         .evaluate(
             r#"JSON.stringify([
               document.querySelector('[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]')?.style.maxWidth,
+              document.querySelector('[data-pip-obstacle="thread-footer"]')?.style.maxWidth,
               document.querySelector('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome')?.style.maxWidth
             ])"#,
         )
         .await
         .unwrap();
-    assert_eq!(styles.as_str().unwrap(), r#"["777px","777px"]"#);
+    assert_eq!(styles.as_str().unwrap(), r#"["777px","777px",""]"#);
     session
         .evaluate("window.__CODEX_SKIN_LITE__.cleanup(); true")
         .await
@@ -104,8 +105,8 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
                 revision: 987655,
                 theme_enabled: true,
                 theme: Some(theme),
-                conversation_centered: false,
-                conversation_max_width: 900,
+                conversation_centered: true,
+                conversation_max_width: 777,
             })
             .unwrap(),
         )
@@ -114,20 +115,99 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
     assert_eq!(status["revision"], 987655);
     let applied = session
         .evaluate(
-            r#"JSON.stringify({
-              style: !!document.querySelector('#codex-skin-lite-theme'),
-              main: !!document.querySelector('[data-ds-part="main"]'),
-              image: document.documentElement.style.getPropertyValue('--ds-theme-background-image').startsWith('url("blob:')
-            })"#,
+            r#"(() => {
+              const footer = document.querySelector('[data-thread-scroll-footer]');
+              const titleSurface = document.querySelector('[data-csl-header-title-surface="true"]');
+              return JSON.stringify({
+                apiVersion: window.__CODEX_SKIN_LITE__?.apiVersion,
+                style: !!document.querySelector('#codex-skin-lite-theme'),
+                main: !!document.querySelector('[data-ds-part="main"]'),
+                image: document.documentElement.style.getPropertyValue('--ds-theme-background-image').startsWith('url("blob:'),
+                footerDocked: footer?.dataset.cslComposerDock === 'true' && footer.parentElement?.hasAttribute('data-app-shell-main-content-layout'),
+                footerWidth: footer?.querySelector('[data-pip-obstacle="thread-footer"]')?.style.maxWidth,
+                titleTransparent: !!titleSurface && getComputedStyle(titleSurface).backgroundColor === 'rgba(0, 0, 0, 0)'
+              });
+            })()"#,
         )
         .await
         .unwrap();
     assert_eq!(
         applied.as_str().unwrap(),
-        r#"{"style":true,"main":true,"image":true}"#
+        r#"{"apiVersion":2,"style":true,"main":true,"image":true,"footerDocked":true,"footerWidth":"777px","titleTransparent":true}"#
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+    let settled = session
+        .evaluate("JSON.stringify(window.__CODEX_SKIN_LITE__.status().metrics)")
+        .await
+        .unwrap();
+    let metrics: serde_json::Value = serde_json::from_str(settled.as_str().unwrap()).unwrap();
+    assert!(
+        metrics["layoutPasses"].as_u64().unwrap() <= 20,
+        "renderer did not settle: {metrics}"
     );
     session
         .evaluate("window.__CODEX_SKIN_LITE__.cleanup(); true")
         .await
         .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "prints the current Codex layout geometry for diagnosis"]
+async fn probe_current_composer_and_header_geometry() {
+    let targets = codex_skin_lite::cdp::list_targets(9222).await.unwrap();
+    let target = codex_skin_lite::cdp::pick_primary_target(&targets).unwrap();
+    let session = codex_skin_lite::cdp::CdpSession::connect(
+        target.web_socket_debugger_url.as_deref().unwrap(),
+    )
+    .await
+    .unwrap();
+    let value = session
+        .evaluate(
+            r#"(() => {
+              const describe = (node) => {
+                if (!node) return null;
+                const style = getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return {
+                  tag: node.tagName,
+                  cls: String(node.className || ''),
+                  attrs: Object.fromEntries([...node.attributes].map(a => [a.name, a.value])),
+                  rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height },
+                  style: {
+                    position: style.position,
+                    overflowY: style.overflowY,
+                    backgroundColor: style.backgroundColor,
+                    backdropFilter: style.backdropFilter,
+                    maxWidth: style.maxWidth,
+                    marginLeft: style.marginLeft,
+                    marginRight: style.marginRight,
+                    zIndex: style.zIndex
+                  }
+                };
+              };
+              const composer = document.querySelector('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome');
+              const thread = document.querySelector('.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container');
+              const content = document.querySelector('[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]');
+              const main = document.querySelector('main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]');
+              const titleText = [...document.querySelectorAll('header *')].find(node => node.children.length === 0 && node.textContent?.includes('修复 Claude EVA macOS 主题'));
+              const chain = node => {
+                const result = [];
+                for (let current = node, i = 0; current && i < 9; current = current.parentElement, i += 1) result.push(describe(current));
+                return result;
+              };
+              return JSON.stringify({
+                api: window.__CODEX_SKIN_LITE__?.status?.() || null,
+                composerInsideThread: !!(thread && composer && thread.contains(composer)),
+                main: describe(main),
+                thread: describe(thread),
+                content: describe(content),
+                sidebars: [...document.querySelectorAll('.app-shell-left-panel, [data-app-shell-right-panel], [data-context-panel], aside[class*="_RightPanel_"], [data-app-shell-tabs="true"], [data-browser-sidebar-webview-host-root], [data-browser-sidebar-webview]')].map(describe),
+                composerChain: chain(composer),
+                titleChain: chain(titleText)
+              });
+            })()"#,
+        )
+        .await
+        .unwrap();
+    println!("{}", value.as_str().unwrap());
 }

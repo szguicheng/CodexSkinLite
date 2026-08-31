@@ -103,6 +103,32 @@ describe("centered conversation", () => {
 
     expect(window.__CODEX_SKIN_LITE__.status().metrics.fullScans).toBe(before);
   });
+
+  it("ignores class churn on ordinary message content", async () => {
+    const window = installRuntime({ fixture: "modernThread" });
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+    const message = window.document.querySelector("article");
+    const before = window.__CODEX_SKIN_LITE__.status().metrics.layoutPasses;
+
+    message.classList.add("streaming-caret-active");
+    await nextFrame(window);
+
+    expect(window.__CODEX_SKIN_LITE__.status().metrics.layoutPasses).toBe(before);
+  });
+
+  it("keeps resize observations when layout node identities are unchanged", async () => {
+    const window = installRuntime({ fixture: "modernThread" });
+    window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+    const root = window.document.querySelector("[data-app-shell-root]");
+    const before = { ...window.__testObserverActivity };
+
+    const transientPanel = window.document.createElement("aside");
+    root.append(transientPanel);
+    transientPanel.remove();
+    await nextFrame(window);
+
+    expect(window.__testObserverActivity).toEqual(before);
+  });
 });
 
 describe("Skin API", () => {
@@ -119,6 +145,22 @@ describe("Skin API", () => {
     expect(
       [...window.document.querySelectorAll('[data-ds-part="sidebar"]')],
     ).toHaveLength(2);
+  });
+
+  it("maps every modern right-panel layer to the shared sidebar theme part", () => {
+    const window = installRuntime({
+      fixture: "modernScrollingComposerWithModernRightPanel",
+    });
+
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+
+    for (const selector of [
+      '[data-app-shell-tabs="true"]',
+      "[data-browser-sidebar-webview-host-root]",
+      "[data-browser-sidebar-webview]",
+    ]) {
+      expect(window.document.querySelector(selector).dataset.dsPart).toBe("sidebar");
+    }
   });
 
   it("replaces one managed style and revokes the previous blob", async () => {
@@ -156,6 +198,80 @@ describe("Skin API", () => {
 });
 
 describe("composer regressions", () => {
+  it("docks a themed scrolling footer and restores its original parent", () => {
+    const window = installRuntime({ fixture: "modernScrollingComposer" });
+    const scroll = window.document.querySelector(".thread-scroll-container");
+    const viewport = window.document.querySelector(
+      "[data-app-shell-main-content-layout]",
+    );
+    const footer = window.document.querySelector("[data-thread-scroll-footer]");
+    expect(footer.parentElement).toBe(scroll);
+
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+
+    expect(footer.parentElement).toBe(viewport);
+    expect(footer.dataset.cslComposerDock).toBe("true");
+    expect(footer.style.position).toBe("absolute");
+    expect(footer.style.bottom).toBe("0px");
+
+    window.__CODEX_SKIN_LITE__.cleanup();
+    expect(footer.parentElement).toBe(scroll);
+    expect(footer.hasAttribute("data-csl-composer-dock")).toBe(false);
+  });
+
+  it("applies centered width to the footer wrapper, not the inner composer", () => {
+    const window = installRuntime({
+      fixture: "modernScrollingComposerWithRightPanel",
+    });
+    const content = window.document.querySelector("[data-csl-thread-content]");
+    const wrapper = window.document.querySelector(
+      '[data-pip-obstacle="thread-footer"]',
+    );
+    const composer = window.document.querySelector(
+      "[data-composer-surface-variant]",
+    );
+
+    window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+
+    expect(content.style.maxWidth).toBe("900px");
+    expect(wrapper.style.maxWidth).toBe("900px");
+    expect(wrapper.style.marginLeft).toBe("0px");
+    expect(wrapper.style.marginRight).toBe("300px");
+    expect(composer.style.maxWidth).toBe("");
+    expect(composer.style.marginLeft).toBe("");
+  });
+
+  it("centers content and footer inside the viewport left by the modern tabs panel", () => {
+    const window = installRuntime({
+      fixture: "modernScrollingComposerWithModernRightPanel",
+    });
+    const content = window.document.querySelector("[data-csl-thread-content]");
+    const wrapper = window.document.querySelector(
+      '[data-pip-obstacle="thread-footer"]',
+    );
+
+    window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+
+    for (const element of [content, wrapper]) {
+      expect(element.style.marginLeft).toBe("0px");
+      expect(element.style.marginRight).toBe("300px");
+    }
+  });
+
+  it("makes the native title surface transparent under a themed header", () => {
+    const window = installRuntime({ fixture: "modernHeaderTitle" });
+    const titleSurface = window.document.querySelector(
+      "[data-title-surface-fixture]",
+    );
+
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+
+    expect(titleSurface.dataset.cslHeaderTitleSurface).toBe("true");
+    expect(
+      window.document.querySelector("#codex-skin-lite-theme").textContent,
+    ).toContain('[data-csl-header-title-surface="true"]');
+  });
+
   it("marks an empty toolbar without creating a divider", async () => {
     const window = installRuntime({ fixture: "composerWithoutAttachments" });
 

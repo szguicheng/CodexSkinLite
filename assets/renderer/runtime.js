@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 1;
+  const API_VERSION = 2;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   existing?.cleanup?.();
@@ -14,12 +14,21 @@
     ownedVariables: new Map(),
     mutationObserver: null,
     resizeObserver: null,
+    observedResizeNodes: new Set(),
     observedRoot: null,
     rafId: 0,
     pendingReasons: new Set(),
     widthElements: new Set(),
     widthOriginals: new WeakMap(),
     widthHadStyle: new WeakMap(),
+    composerDock: {
+      node: null,
+      scroll: null,
+      parent: null,
+      nextSibling: null,
+      attribute: null,
+      styles: null,
+    },
     metrics: {
       layoutPasses: 0,
       fullScans: 0,
@@ -30,12 +39,25 @@
     layoutDurations: [],
   };
 
+  const SIDEBAR_SELECTOR = [
+    ".app-shell-left-panel",
+    "[data-app-shell-right-panel]",
+    "[data-context-panel]",
+    'aside[class*="_RightPanel_"]',
+    '[data-app-shell-tabs="true"]',
+    "[data-browser-sidebar-webview-host-root]",
+    "[data-browser-sidebar-webview]",
+  ].join(",");
+
   const LAYOUT_SELECTOR = [
     "main",
     "header",
-    "aside",
+    SIDEBAR_SELECTOR,
     ".thread-scroll-container",
     "[data-app-shell-main-content-layout]",
+    "[data-app-shell-header-toolbar]",
+    "[data-thread-scroll-footer]",
+    '[data-pip-obstacle="thread-footer"]',
     "[data-composer-surface-variant]",
     "[data-csl-thread-content]",
     "[data-app-shell-right-panel]",
@@ -71,7 +93,7 @@
     remember(main, "main");
     for (const node of queryAll(
       document,
-      '.app-shell-left-panel, [data-app-shell-right-panel], [data-context-panel], aside[class*="_RightPanel_"]',
+      SIDEBAR_SELECTOR,
     )) {
       remember(node, "sidebar");
     }
@@ -113,6 +135,16 @@
     );
     for (const node of queryAll(document, '[role="dialog"]')) remember(node, "dialog");
 
+    const headerToolbar = main?.querySelector("[data-app-shell-header-toolbar]");
+    const titleButton = headerToolbar?.querySelector(
+      'button.text-start[class*="truncate"], button[class*="text-start"][class*="max-w-"]',
+    );
+    let titleSurface = titleButton;
+    while (titleSurface?.parentElement && titleSurface.parentElement !== headerToolbar) {
+      titleSurface = titleSurface.parentElement;
+    }
+    if (titleSurface?.parentElement !== headerToolbar) titleSurface = null;
+
     for (const node of queryAll(document, "[data-ds-part]")) {
       const current = node.getAttribute("data-ds-part");
       if (KNOWN_PARTS.has(current) && desired.get(node) !== current) {
@@ -126,6 +158,10 @@
       if (node !== thread) node.removeAttribute("data-ds-thread-scroll");
     }
     if (thread) thread.setAttribute("data-ds-thread-scroll", "true");
+    for (const node of queryAll(document, "[data-csl-header-title-surface]")) {
+      if (node !== titleSurface) node.removeAttribute("data-csl-header-title-surface");
+    }
+    titleSurface?.setAttribute("data-csl-header-title-surface", "true");
   };
 
   const clearTheme = () => {
@@ -164,6 +200,9 @@
     for (const node of queryAll(document, "[data-ds-thread-scroll]")) {
       node.removeAttribute("data-ds-thread-scroll");
     }
+    for (const node of queryAll(document, "[data-csl-header-title-surface]")) {
+      node.removeAttribute("data-csl-header-title-surface");
+    }
   };
 
   const decodeBase64 = (value) => {
@@ -201,6 +240,9 @@
     style.textContent = `
       html, body { background-image: var(--ds-theme-background-image) !important;
         background-position: center !important; background-size: cover !important; }
+      [data-csl-header-title-surface="true"] {
+        background-color: transparent !important;
+      }
       ${theme.compiledCss || ""}`;
   };
 
@@ -208,27 +250,132 @@
     const main = document.querySelector(
       'main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]',
     );
+    const scroll = main?.querySelector(
+      ".thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container",
+    );
+    const trackedFooter = state.composerDock.node;
+    const footer =
+      (trackedFooter?.isConnected && trackedFooter) ||
+      scroll?.querySelector("[data-thread-scroll-footer]") ||
+      main?.querySelector("[data-thread-scroll-footer]");
+    const composerSurface = main?.querySelector(
+      '[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome',
+    );
+    const composer =
+      footer?.querySelector('[data-pip-obstacle="thread-footer"]') ||
+      composerSurface?.closest('[data-pip-obstacle="thread-footer"]') ||
+      composerSurface;
     return {
       root:
         main?.closest("[data-app-shell-root]") ||
         main?.parentElement ||
         document.documentElement,
       main,
+      scroll,
+      footer,
+      dock:
+        scroll?.closest(
+          '[data-app-shell-main-content-layout], [data-ds-thread-surface="true"]',
+        ) || main,
       content: main?.querySelector(
         '[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]',
       ),
-      composer: main?.querySelector(
-        '[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome',
-      ),
-      sidebars: queryAll(
-        document,
-        '.app-shell-left-panel, [data-app-shell-right-panel], [data-context-panel], aside[class*="_RightPanel_"]',
-      ),
+      composer,
+      sidebars: queryAll(document, SIDEBAR_SELECTOR),
     };
   };
 
+  const COMPOSER_DOCK_PROPERTIES = [
+    "position",
+    "top",
+    "right",
+    "bottom",
+    "left",
+    "width",
+    "z-index",
+  ];
+
+  const restoreComposerDock = () => {
+    const dock = state.composerDock;
+    const node = dock.node;
+    if (!node) return;
+    if (dock.parent?.isConnected) {
+      if (dock.nextSibling?.parentElement === dock.parent) {
+        dock.parent.insertBefore(node, dock.nextSibling);
+      } else {
+        dock.parent.append(node);
+      }
+    }
+    for (const [property, original] of dock.styles || []) {
+      if (original.value) {
+        node.style.setProperty(property, original.value, original.priority);
+      } else {
+        node.style.removeProperty(property);
+      }
+    }
+    if (dock.attribute === null) node.removeAttribute("data-csl-composer-dock");
+    else node.setAttribute("data-csl-composer-dock", dock.attribute);
+    Object.assign(dock, {
+      node: null,
+      scroll: null,
+      parent: null,
+      nextSibling: null,
+      attribute: null,
+      styles: null,
+    });
+  };
+
+  const syncComposerDocking = (layout, enabled) => {
+    const current = state.composerDock;
+    const footer = layout.footer;
+    const shouldDock =
+      enabled &&
+      footer &&
+      layout.scroll &&
+      layout.dock &&
+      (footer.parentElement === layout.scroll || footer === current.node);
+    if (!shouldDock) {
+      restoreComposerDock();
+      return;
+    }
+    if (current.node && (current.node !== footer || current.scroll !== layout.scroll)) {
+      restoreComposerDock();
+    }
+    if (!state.composerDock.node) {
+      state.composerDock.node = footer;
+      state.composerDock.scroll = layout.scroll;
+      state.composerDock.parent = footer.parentElement;
+      state.composerDock.nextSibling = footer.nextSibling;
+      state.composerDock.attribute = footer.getAttribute("data-csl-composer-dock");
+      state.composerDock.styles = new Map(
+        COMPOSER_DOCK_PROPERTIES.map((property) => [
+          property,
+          {
+            value: footer.style.getPropertyValue(property),
+            priority: footer.style.getPropertyPriority(property),
+          },
+        ]),
+      );
+    }
+    if (footer.parentElement !== layout.dock) layout.dock.append(footer);
+    footer.setAttribute("data-csl-composer-dock", "true");
+    for (const [property, value] of Object.entries({
+      position: "absolute",
+      top: "auto",
+      right: "0px",
+      bottom: "0px",
+      left: "0px",
+      width: "auto",
+      "z-index": "10",
+    })) {
+      footer.style.setProperty(property, value, "important");
+    }
+  };
+
   const mutationAffectsLayout = (record) => {
-    if (record.type === "attributes") return true;
+    if (record.type === "attributes") {
+      return record.target?.matches?.(LAYOUT_SELECTOR) || false;
+    }
     const nodes = [...record.addedNodes, ...record.removedNodes];
     return nodes.some(
       (node) =>
@@ -273,15 +420,18 @@
     if (!state.resizeObserver) {
       state.resizeObserver = new ResizeObserver(() => schedule("resize"));
     }
-    state.resizeObserver.disconnect();
-    for (const node of [
-      layout.main,
-      layout.content,
-      layout.composer,
-      ...layout.sidebars,
-    ]) {
-      if (node?.isConnected) state.resizeObserver.observe(node);
+    const nextResizeNodes = new Set(
+      [layout.main, layout.content, layout.composer, ...layout.sidebars].filter(
+        (node) => node?.isConnected,
+      ),
+    );
+    for (const node of state.observedResizeNodes) {
+      if (!nextResizeNodes.has(node)) state.resizeObserver.unobserve(node);
     }
+    for (const node of nextResizeNodes) {
+      if (!state.observedResizeNodes.has(node)) state.resizeObserver.observe(node);
+    }
+    state.observedResizeNodes = nextResizeNodes;
   };
 
   const disconnectObservers = () => {
@@ -289,6 +439,7 @@
     state.resizeObserver?.disconnect();
     state.mutationObserver = null;
     state.resizeObserver = null;
+    state.observedResizeNodes.clear();
     state.observedRoot = null;
     if (state.rafId) cancelAnimationFrame(state.rafId);
     state.rafId = 0;
@@ -385,8 +536,10 @@
   const reconcileLayout = (_reasons) => {
     const startedAt = performance.now();
     const payload = state.payload || {};
-    const layout = findLayout();
+    let layout = findLayout();
     state.metrics.layoutPasses += 1;
+    syncComposerDocking(layout, Boolean(payload.themeEnabled && payload.theme));
+    layout = findLayout();
     if (payload.themeEnabled && payload.theme) {
       state.metrics.fullScans += 1;
       markParts();
@@ -429,6 +582,7 @@
   const cleanup = () => {
     disconnectObservers();
     clearCenteredWidth();
+    restoreComposerDock();
     clearTheme();
     clearParts();
     state.payload = null;
