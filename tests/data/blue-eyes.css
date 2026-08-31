@@ -1,0 +1,29 @@
+[data-ds-part="sidebar"] {
+  transition-property: background-color;
+  transition-duration: 0ms;
+}
+
+[data-ds-part="message"] {
+  background-color: transparent;
+  border-color: transparent;
+  border-style: none;
+  border-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+[data-ds-part="composer"] {
+  background-color: transparent;
+  border-color: transparent;
+  border-style: none;
+  border-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+[data-ds-part="thread"] {
+  background-color: rgba(246, 246, 246, 0.16);
+  backdrop-filter: blur(14px) saturate(1.08);
+}

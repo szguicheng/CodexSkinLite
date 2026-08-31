@@ -181,11 +181,7 @@ pub fn validate_package(bytes: &[u8]) -> Result<ValidatedThemePackage, ThemeErro
         .map_err(|error| ThemeError::InvalidManifest(format!("theme.json: {error}")))?;
     let css = String::from_utf8(css_bytes.clone())
         .map_err(|error| ThemeError::InvalidCss(error.to_string()))?;
-    if css.is_empty() || css.len() > CSS_LIMIT {
-        return Err(ThemeError::InvalidCss(
-            "theme.css is empty or too large".into(),
-        ));
-    }
+    super::safe_css::validate_safe_css(&css)?;
     validate_manifest(&manifest)?;
     validate_theme(&theme, &manifest, &image_name)?;
     validate_declared_files(
