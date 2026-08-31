@@ -4,29 +4,30 @@ Status: follow-up build awaiting user retest
 
 ## Candidate
 
-- Source fix commit: `1864bb0`
+- Source fix commit: `b00fd86`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
 - ZIP: `dist/CodexSkinLite-0.1.2-macos-arm64.zip`
-- ZIP bytes: 1,431,510
-- SHA-256: `373096941db736813e06092bad721a318701b822e3a6f89451ec072430373e50`
-- Renderer bytes: 22,305
+- ZIP bytes: 1,431,200
+- SHA-256: `c43c1f963b908a14a38f4256e8b1299e3b048c480e2b86e569a7ea677ba40f2a`
+- Renderer bytes: 21,224
 - Renderer timers: 0
 - Automated Rust tests: 36 non-ignored tests passed
 - Automated renderer tests: 24 passed
-- Live current-Codex CDP probes: theme and centered-width mutation tests passed against the current 9222 page; the main active thread reported one footer/composer in the native scroll surface, while a separate right-panel thread remained untouched
+- Live current-Codex CDP probes: theme and centered-width mutation tests passed against the current 9222 page; after a real 320px thread scroll, footer left/top/bottom deltas and the bottom gap all remained within 1px
 
 ## Follow-up working-tree repaired root causes
 
 - Never reparent the React-managed `[data-thread-scroll-footer]`; keep the native footer and composer in the active thread scroll container.
+- Apply the `thread` theme part to the stable viewport parent and keep the real scroll node separately marked, preventing theme filters from turning scroll coordinates into the footer's fixed-position coordinate system.
 - Remove duplicate footer nodes during bootstrap and relevant route/layout reconciliation, while failing closed when retained routes are ambiguous.
 - Apply centered width to `[data-pip-obstacle="thread-footer"]`, not the inner composer surface, so conversation and input use the same coordinate space.
 - Treat the modern `data-app-shell-tabs` and `data-browser-sidebar-webview*` layers as right-panel surfaces for both available-width calculation and theme mapping.
 - Make the current title toolbar's direct native white surface transparent only while a theme is active.
 - Keep stable `ResizeObserver` subscriptions and ignore ordinary message class churn, preventing the renderer from repeatedly rescanning an unchanged layout.
-- Upgrade the injected runtime API to version 4 and migrate stale footer state left by versions 2 and 3.
+- Upgrade the injected runtime API to version 6 and migrate stale footer state left by versions 2 through 5.
 - Apply the persisted theme and centered-width settings immediately after every successful Open, Reconnect, or confirmed restart, retrying above a renderer revision retained across utility restarts.
 
 ## Test preparation
