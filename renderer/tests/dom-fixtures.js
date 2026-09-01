@@ -13,7 +13,8 @@ export function installRuntime(input) {
   if (
     options.fixture === "modernThreadWithRightPanel" ||
     options.fixture === "modernScrollingComposerWithRightPanel" ||
-    options.fixture === "modernScrollingComposerWithModernRightPanel"
+    options.fixture === "modernScrollingComposerWithModernRightPanel" ||
+    options.fixture === "modernHomeComposer"
   ) {
     installPanelGeometry(window);
   }
@@ -85,6 +86,7 @@ function installObserverCounters(window) {
 
 function fixtureHtml(name) {
   const modernRightPanel = name === "modernScrollingComposerWithModernRightPanel";
+  const homeComposer = name === "modernHomeComposer";
   const rightPanel =
     name === "modernThreadWithRightPanel" ||
     name === "modernScrollingComposerWithRightPanel"
@@ -100,6 +102,7 @@ function fixtureHtml(name) {
     name === "longFocusedThread" ||
     scrollingComposer ||
     headerTitle ||
+    homeComposer ||
     rightPanel
   ) {
     const attachment =
@@ -126,20 +129,32 @@ function fixtureHtml(name) {
            </div>
          </header>`
       : '<header data-pip-obstacle="app-shell-header"></header>';
+    const content = homeComposer
+      ? `
+        <div class="relative z-20 pt-1.5 pb-4">
+          <div class="mx-auto w-full max-w-(--thread-content-max-width) px-toolbar flex flex-col gap-2">
+            <div data-csl-thread-content="true"></div>
+            <div data-codex-composer-root="" data-composer-placement="home">
+              ${composer}
+            </div>
+          </div>
+        </div>`
+      : `
+        <div data-app-shell-main-content-layout="thread-edge-scroll">
+          <div class="thread-scroll-container" data-app-action-timeline-scroll="true">
+            <div data-csl-thread-content="true" style="padding-top: 2px">
+              <article data-message-id="one"></article>
+            </div>
+            ${scrollingComposer ? footer : ""}
+          </div>
+          ${scrollingComposer ? "" : composer}
+        </div>`;
     return `
       <div data-app-shell-root="true">
         <aside class="app-shell-left-panel"></aside>
         <main data-app-shell-main-surface="true">
           ${header}
-          <div data-app-shell-main-content-layout="thread-edge-scroll">
-            <div class="thread-scroll-container" data-app-action-timeline-scroll="true">
-              <div data-csl-thread-content="true" style="padding-top: 2px">
-                <article data-message-id="one"></article>
-              </div>
-              ${scrollingComposer ? footer : ""}
-            </div>
-            ${scrollingComposer ? "" : composer}
-          </div>
+          ${content}
         </main>
         ${rightPanel}
       </div>`;

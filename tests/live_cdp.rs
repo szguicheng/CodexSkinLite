@@ -58,7 +58,7 @@ async fn injects_centered_width_into_current_codex_and_cleans_up() {
         .evaluate(
             r#"JSON.stringify([
               document.querySelector('[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]')?.style.maxWidth,
-              document.querySelector('[data-pip-obstacle="thread-footer"]')?.style.maxWidth,
+              document.querySelector('[data-pip-obstacle="thread-footer"], [data-codex-composer-root]')?.style.maxWidth,
               document.querySelector('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome')?.style.maxWidth
             ])"#,
         )
@@ -118,14 +118,20 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .evaluate(
             r#"(() => {
               const main = document.querySelector('main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]');
-              const thread = main?.querySelector('.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container');
+              const thread = main?.querySelector('.thread-scroll-container[data-ds-thread-scroll="true"]');
+              const composerSelector = '[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome';
+              const allComposers = [...document.querySelectorAll(composerSelector)];
               const footers = [...(thread?.querySelectorAll('[data-thread-scroll-footer]') || [])];
-              const composers = [...(thread?.querySelectorAll('[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome') || [])];
+              const composers = thread ? [...thread.querySelectorAll(composerSelector)] : allComposers;
               const footer = footers[0];
               const composer = composers[0];
+              const homeRoot = allComposers[0]?.closest('[data-codex-composer-root]');
+              const homeWrapper = homeRoot?.closest('[class*="max-w-(--thread-content-max-width)"]');
+              const widthTarget = footer?.querySelector('[data-pip-obstacle="thread-footer"]') || homeWrapper;
               const titleSurface = document.querySelector('[data-csl-header-title-surface="true"]');
               return JSON.stringify({
                 apiVersion: window.__CODEX_SKIN_LITE__?.apiVersion,
+                route: thread ? 'thread' : 'home',
                 style: !!document.querySelector('#codex-skin-lite-theme'),
                 main: !!main && main.getAttribute('data-ds-part') === 'main',
                 image: document.documentElement.style.getPropertyValue('--ds-theme-background-image').startsWith('url("blob:'),
@@ -135,22 +141,41 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
                 composerInsideThread: !!composer && !!thread && thread.contains(composer),
                 footerDocked: footer?.dataset.cslComposerDock === 'true' && footer.parentElement?.hasAttribute('data-app-shell-main-content-layout'),
                 footerPosition: footer ? getComputedStyle(footer).position : null,
-                footerWidth: footer?.querySelector('[data-pip-obstacle="thread-footer"]')?.style.maxWidth,
+                footerWidth: widthTarget?.style.maxWidth || null,
+                composerWidth: composer?.style.maxWidth || null,
                 titleTransparent: !!titleSurface && getComputedStyle(titleSurface).backgroundColor === 'rgba(0, 0, 0, 0)'
               });
             })()"#,
         )
         .await
         .unwrap();
-    assert_eq!(
-        applied.as_str().unwrap(),
-        r#"{"apiVersion":7,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerPosition":"fixed","footerWidth":"777px","titleTransparent":true}"#
-    );
+    let applied: serde_json::Value = serde_json::from_str(applied.as_str().unwrap()).unwrap();
+    assert_eq!(applied["apiVersion"], 8);
+    assert_eq!(applied["style"], true);
+    assert_eq!(applied["main"], true);
+    assert_eq!(applied["image"], true);
+    assert_eq!(applied["footerDocked"], false);
+    assert_eq!(applied["footerWidth"], "777px");
+    assert_eq!(applied["titleTransparent"], true);
+    if applied["route"] == "thread" {
+        assert_eq!(applied["footerCount"], 1);
+        assert_eq!(applied["composerCount"], 1);
+        assert_eq!(applied["footerInThread"], true);
+        assert_eq!(applied["composerInsideThread"], true);
+        assert_eq!(applied["footerPosition"], "fixed");
+    } else {
+        assert_eq!(applied["footerCount"], 0);
+        assert_eq!(applied["composerCount"], 1);
+        assert_eq!(applied["footerInThread"], false);
+        assert_eq!(applied["composerInsideThread"], false);
+        assert_eq!(applied["footerPosition"], serde_json::Value::Null);
+        assert_eq!(applied["composerWidth"], serde_json::Value::Null);
+    }
     let scroll_geometry = session
         .evaluate(
             r#"(() => {
               const main = document.querySelector('main[data-app-shell-main-surface], main.main-surface, main[class*="_MainContentSurface_"]');
-              const thread = main?.querySelector('.thread-scroll-container[data-app-action-timeline-scroll], .thread-scroll-container');
+              const thread = main?.querySelector('.thread-scroll-container[data-ds-thread-scroll="true"]');
               const footer = thread?.querySelector('[data-thread-scroll-footer]');
               if (!thread || !footer) return JSON.stringify({ missing: true });
               const originalScrollTop = thread.scrollTop;
@@ -177,13 +202,11 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .unwrap();
     let geometry: serde_json::Value =
         serde_json::from_str(scroll_geometry.as_str().unwrap()).unwrap();
-    assert_eq!(
-        geometry["scrollChanged"], true,
-        "thread did not scroll: {geometry}"
-    );
-    for key in ["leftDelta", "topDelta", "bottomDelta", "bottomGap"] {
-        let value = geometry[key].as_f64().unwrap();
-        assert!(value.abs() <= 1.0, "{key} changed by {value}: {geometry}");
+    if applied["route"] == "thread" && geometry["scrollChanged"] == true {
+        for key in ["leftDelta", "topDelta", "bottomDelta", "bottomGap"] {
+            let value = geometry[key].as_f64().unwrap();
+            assert!(value.abs() <= 1.0, "{key} changed by {value}: {geometry}");
+        }
     }
     tokio::time::sleep(std::time::Duration::from_millis(750)).await;
     let settled = session

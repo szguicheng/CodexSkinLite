@@ -132,6 +132,25 @@ describe("centered conversation", () => {
   });
 });
 
+describe("new conversation composer", () => {
+  it("centers the home composer wrapper without styling the inner surface", async () => {
+    const window = installRuntime({ fixture: "modernHomeComposer" });
+    const composerRoot = window.document.querySelector("[data-codex-composer-root]");
+    const wrapper = composerRoot.closest(
+      '[class*="max-w-(--thread-content-max-width)"]',
+    );
+    const composer = window.document.querySelector(
+      "[data-composer-surface-variant]",
+    );
+
+    await window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+
+    expect(wrapper.style.maxWidth).toBe("900px");
+    expect(composerRoot.style.maxWidth).toBe("");
+    expect(composer.style.maxWidth).toBe("");
+  });
+});
+
 describe("Skin API", () => {
   it("maps the complete main viewport and both side panels", async () => {
     const window = installRuntime({ fixture: "modernThreadWithRightPanel" });

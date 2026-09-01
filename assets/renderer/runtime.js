@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 7;
+  const API_VERSION = 8;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -321,8 +321,12 @@
       : main?.querySelector(
       '[data-composer-surface-variant][data-composer-radius-variant], [class*="_ComposerLayoutRoot_"], .composer-surface-chrome',
         );
+    const homeComposerWrapper = composerSurface
+      ?.closest("[data-codex-composer-root]")
+      ?.closest('[class*="max-w-(--thread-content-max-width)"]');
     const composer =
       footer?.querySelector('[data-pip-obstacle="thread-footer"]') ||
+      homeComposerWrapper ||
       composerSurface?.closest('[data-pip-obstacle="thread-footer"]') ||
       composerSurface;
     return {
