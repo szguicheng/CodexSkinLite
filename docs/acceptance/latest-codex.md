@@ -1,20 +1,20 @@
 # CodexSkinLite Manual Acceptance — 2026-09-01
 
-Status: home-composer alignment build ready; full user retest pending
+Status: theme editor inheritance build ready; full user retest pending
 
 ## Candidate
 
-- Source commits: `e51847bd`, `5a487341`, `75b1a956`, `b34da733`, `fa747f78`, `f95c4956`
+- Source commits: `e51847bd`, `5a487341`, `75b1a956`, `b34da733`, `fa747f78`, `f95c4956`, `8f4acade`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: `dist/CodexSkinLite-0.1.4-macos-arm64.zip`
-- SHA-256: `968275ab2d4a772e72433b86daf6bbd1a38a21346df43d902d9bc00c979256d3`
-- Bundle: `0.1.4 (5)`, Mach-O arm64
-- Renderer API/bytes: `8` / `22,488`
+- ZIP: `dist/CodexSkinLite-0.1.5-macos-arm64.zip`
+- SHA-256: `572bc209f72bb8797e3f0f5c54b9dc00d7fbb4d28b5ae97372793790a4280925`
+- Bundle: `0.1.5 (6)`, Mach-O arm64
+- Renderer API/bytes: `8` / `22,844`
 - Renderer timers: 0
-- Automated Rust tests: 45 non-ignored tests passed
+- Automated Rust tests: 48 non-ignored tests passed
 - Automated renderer tests: 25 passed
 - Live current-Codex CDP probes: theme and centered-width mutation tests passed against the current 9222 page; after a real 320px thread scroll, footer left/top/bottom deltas and the bottom gap all remained within 1px
 - Startup smoke: Quartz reported one `CodexSkinLite 设置` window above ordinary ChatGPT/PaperDiff windows while the process retained accessory activation.
@@ -33,12 +33,15 @@ Status: home-composer alignment build ready; full user retest pending
 - Store per-theme bounded customization in `customization.json`; preview uses an in-memory payload and Save persists it without changing the imported ZIP.
 - Keep composer customization limited to local bottom/horizontal insets on the existing fixed footer.
 - For new conversations, apply centered width to the outer home composer content wrapper, not the nested ComposerLayoutRoot surface; this avoids double margins and right drift.
+- Initialize the customization editor from the selected package's theme.json and safe theme.css values; saved values still override the package values.
+- Add an explicit `无` appearance option. It clears the active theme and disables presentation; opening customization with `无` shows an empty draft.
+- Treat missing background-position overrides as package artwork focus values, so an empty draft does not replace the theme's original image focus.
 
 ## Test preparation
 
 1. Finish or save current Codex work because one test restarts the official app.
 2. Quit Codex++ completely and disable the previous user blur script. The comparison must contain only CodexSkinLite.
-3. Extract `CodexSkinLite-0.1.4-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
+3. Extract `CodexSkinLite-0.1.5-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
 4. Because this build is unsigned, use Finder’s Open action if macOS blocks the first launch.
 5. Confirm Settings shows `/Applications/ChatGPT.app` as the Codex path.
 
@@ -67,9 +70,9 @@ Mark each row Pass or Fail and attach a screenshot/video for failures.
 | D1 | Resize and enter/leave full screen | Theme coverage and centering remain correct | Pending |
 | D2 | Quit and reopen CodexSkinLite, then Reconnect | Imported themes/settings persist and renderer reconnects | Pending |
 | D3 | Compare with Codex++ fully quit | Scrolling, typing, opening panels, and general UI should feel like native Codex rather than the previous slowed state | Pending |
-| E1 | Launch CodexSkinLite from the new 0.1.4 bundle | Settings opens once automatically and is in front; closing it does not create another window | Pass in startup smoke; user retest pending |
+| E1 | Launch CodexSkinLite from the new 0.1.5 bundle | Settings opens once automatically and is in front; closing it does not create another window | Pass in prior startup smoke; user retest pending |
 | E2 | Click `远程主题画廊` beside ZIP import | The default browser opens `https://dreamskin.cc/gallery`; the app does not download the page itself | Pending |
-| E3 | Open `自定义主题…` for the active imported theme | Editor shows background, palette, component, and composer controls | Pending |
+| E3 | Open `自定义主题…` for the active imported theme | Editor is prefilled from the selected theme's existing values; opening it with `无` shows a blank draft | Pending |
 | E4 | Change values and click `预览` | Current Codex updates; no customization file is written and the composer stays in its original DOM tree | Pending |
 | E5 | Click `保存`, reconnect, then reopen the editor | Values survive reconnect/relaunch and the original ZIP files are unchanged | Pending |
 | E6 | Click `恢复默认` → `预览` → `保存` | Package theme values return and the optional customization file is removed | Pending |
