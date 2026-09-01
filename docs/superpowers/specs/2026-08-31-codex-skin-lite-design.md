@@ -2,14 +2,15 @@
 
 Date: 2026-08-31
 
-Status: Approved in chat; awaiting written-spec review
+Status: Base specification; extended by `docs/superpowers/specs/2026-09-01-theme-customization-design.md`
 
 ## 1. Summary
 
-CodexSkinLite is a macOS Apple Silicon utility that provides exactly two Codex desktop customizations:
+CodexSkinLite is a macOS Apple Silicon utility that provides three Codex desktop customizations:
 
 1. DreamSkin-compatible theme import, selection, activation, and removal.
 2. A centered conversation layout with a configurable maximum width shared by the message column and composer.
+3. A bounded, previewable, and persistable customization layer for the active imported theme.
 
 The application is a single Rust process with a native AppKit status item and settings window. It launches the official Codex application with a loopback Chrome DevTools Protocol (CDP) endpoint and injects a purpose-built renderer runtime. It does not use Tauri, React, Vite, an embedded WebView, a model proxy, or the full Codex++ renderer.
 
@@ -23,6 +24,7 @@ CodexSkinLite is derived in part from Codex++ behavior and compatibility work. T
 - Keep theme CSS independent of volatile Codex private class names by exposing stable Skin API parts.
 - Apply and remove themes without reloading Codex.
 - Apply, change, and remove centered-width layout without reloading Codex.
+- Preview and save bounded theme color, surface, background, and composer-position overrides without changing the React-owned DOM structure.
 - Provide a native, minimal macOS control surface.
 - Produce an Apple Silicon `.app.zip` release with a SHA-256 checksum.
 
@@ -30,7 +32,7 @@ CodexSkinLite is derived in part from Codex++ behavior and compatibility work. T
 
 - Windows, Linux, or Intel Mac support.
 - Theme marketplace, community browsing, publishing, or remote theme download.
-- A theme editor or arbitrary CSS editor.
+- An arbitrary CSS/DOM editor or unrestricted component dragging.
 - Codex session management, model switching, provider proxies, remote control, pets, menu enhancements, localization, or plugin management.
 - Modifying, patching, re-signing, or replacing the official `Codex.app` bundle.
 - Automatic termination of a normally launched Codex process.
@@ -74,6 +76,7 @@ The workspace is divided into focused modules:
 - `cdp`: endpoint validation, target selection, WebSocket commands, new-document registration, injection, health, and reconnect.
 - `theme_package`: ZIP validation, manifest validation, checksum validation, Safe CSS parsing, and CSS compilation.
 - `theme_store`: atomic import, listing, activation preparation, deletion, and active-theme lookup.
+- `theme_customization`: validated per-theme overrides and generated Safe CSS/layout values.
 - `settings`: minimal persisted configuration and atomic updates.
 - `renderer`: injected JavaScript runtime and a small host-side payload builder.
 
@@ -100,6 +103,8 @@ The settings window contains three sections:
 - Theme enabled switch.
 - Current imported theme selector.
 - Import DreamSkin ZIP.
+- Open the remote theme gallery at `https://dreamskin.cc/gallery`.
+- Open the bounded customization window for the selected theme.
 - Delete inactive theme.
 - Open local theme directory.
 
@@ -155,6 +160,7 @@ Data is stored below:
         ├── theme.json
         ├── theme.css
         ├── compiled.css
+        ├── customization.json (optional)
         └── background.<webp|jpg|png>
 ```
 
@@ -168,6 +174,8 @@ Data is stored below:
 - `conversationMaxWidth`
 
 All settings and theme activation writes use a temporary sibling followed by atomic replacement. Unknown or invalid settings values are normalized without deleting valid themes.
+
+CodexSkinLite opens the settings window once after every application launch. The status-item menu remains available after the window is closed. The remote gallery is opened by the system browser; CodexSkinLite does not fetch or execute remote theme content.
 
 ## 9. DreamSkin Package Compatibility
 
@@ -326,6 +334,10 @@ Failure preserves the previous active theme and settings.
 
 Disabling a feature removes only that feature's owned state. Disabling themes does not disable centered width, and disabling centered width does not remove Skin API markers needed by an active theme.
 
+### Theme customization
+
+The customization editor operates on the currently selected imported theme. Preview builds an in-memory candidate payload and sends it through the same renderer acknowledgment path as normal theme activation. Save validates and atomically writes `customization.json`; when Codex is connected it also applies the candidate, while an offline save is applied on the next successful connection. Reset removes only the selected theme's customization file after the reset has been previewed and saved.
+
 ## 15. Error Handling and Diagnostics
 
 - Invalid import: report the precise invalid file, selector, property, or manifest field; publish nothing.
@@ -337,6 +349,7 @@ Disabling a feature removes only that feature's owned state. Disabling themes do
 - Missing critical UI parts: stop geometry mutations, apply only confirmed-safe presentation, and expose a compatibility warning.
 - Composer adapter failure: restore original DOM and inline values immediately.
 - Corrupt settings: load normalized defaults while preserving the theme directory.
+- Corrupt `customization.json`: ignore it and use the package's original theme values.
 
 Logs are local, size-rotated, and contain no conversation text, prompt contents, credentials, or theme image bytes.
 
@@ -348,6 +361,7 @@ Logs are local, size-rotated, and contain no conversation text, prompt contents,
 - No package executable is run.
 - ZIP extraction is path-safe and bounded.
 - Theme CSS is parsed against an allowlist and compiled before injection.
+- Customization values are generated by the client from bounded fields; users cannot inject CSS or JavaScript through the editor.
 - File operations remain below the application support directory after canonical-path checks.
 - The tool does not modify the official Codex bundle.
 - The application performs no telemetry or background network request.
@@ -366,6 +380,7 @@ Logs are local, size-rotated, and contain no conversation text, prompt contents,
 - Theme switch completes without Codex reload and targets completion within 300 ms for ordinary package sizes.
 - No visible background clear-frame during focused-composer scrolling or streaming output.
 - Opening the right context panel must not cover the composer and must inherit `sidebar` presentation.
+- Previewing or saving customization must not reparent, duplicate, or scroll the native composer footer.
 
 Performance measurements are release gates, not best-effort observations. A missed target must be documented with measurements before release.
 
@@ -393,6 +408,7 @@ Performance measurements are release gates, not best-effort observations. A miss
 - Scroll, caret, and message-text mutations do not schedule full scans.
 - Native footer containment, route replacement, duplicate-footer cleanup, and
   older-runtime migration.
+- Theme customization payloads, preview/reset cleanup, background focus, and bounded composer insets.
 
 ### Real Codex acceptance matrix
 
@@ -404,6 +420,7 @@ Performance measurements are release gates, not best-effort observations. A miss
 - Open and close right context panel.
 - Resize and full-screen transitions.
 - Theme hot switch and disable.
+- Theme customization preview, save, reset, application after reconnect, and recovery from a corrupt customization file.
 - Centered-width hot update and disable.
 - Codex quit, relaunch, and reconnect.
 - CodexSkinLite quit and later reconnect.
