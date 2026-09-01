@@ -1,22 +1,23 @@
-# CodexSkinLite Manual Acceptance — 2026-08-31
+# CodexSkinLite Manual Acceptance — 2026-09-01
 
-Status: follow-up build awaiting user retest
+Status: customization build ready; full user retest pending
 
 ## Candidate
 
-- Source fix commit: `b00fd86`
+- Source commits: `e51847bd`, `5a487341`, `75b1a956`, `b34da733`, `fa747f78`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: `dist/CodexSkinLite-0.1.2-macos-arm64.zip`
-- ZIP bytes: 1,431,200
-- SHA-256: `c43c1f963b908a14a38f4256e8b1299e3b048c480e2b86e569a7ea677ba40f2a`
-- Renderer bytes: 21,224
+- ZIP: `dist/CodexSkinLite-0.1.3-macos-arm64.zip`
+- SHA-256: `0acad965512b66c7a0fe7bd45da7851e5f8a2d478c189e44d5a02b8a3761d73c`
+- Bundle: `0.1.3 (4)`, Mach-O arm64
+- Renderer API/bytes: `7` / `22,299`
 - Renderer timers: 0
-- Automated Rust tests: 36 non-ignored tests passed
-- Automated renderer tests: 24 passed
+- Automated Rust tests: 45 non-ignored tests passed
+- Automated renderer tests: 25 passed
 - Live current-Codex CDP probes: theme and centered-width mutation tests passed against the current 9222 page; after a real 320px thread scroll, footer left/top/bottom deltas and the bottom gap all remained within 1px
+- Startup smoke: Quartz reported one `CodexSkinLite 设置` window above ordinary ChatGPT/PaperDiff windows while the process retained accessory activation.
 
 ## Follow-up working-tree repaired root causes
 
@@ -27,14 +28,16 @@ Status: follow-up build awaiting user retest
 - Treat the modern `data-app-shell-tabs` and `data-browser-sidebar-webview*` layers as right-panel surfaces for both available-width calculation and theme mapping.
 - Make the current title toolbar's direct native white surface transparent only while a theme is active.
 - Keep stable `ResizeObserver` subscriptions and ignore ordinary message class churn, preventing the renderer from repeatedly rescanning an unchanged layout.
-- Upgrade the injected runtime API to version 6 and migrate stale footer state left by versions 2 through 5.
+- Upgrade the injected runtime API to version 7 and migrate stale footer state left by versions 2 through 6.
 - Apply the persisted theme and centered-width settings immediately after every successful Open, Reconnect, or confirmed restart, retrying above a renderer revision retained across utility restarts.
+- Store per-theme bounded customization in `customization.json`; preview uses an in-memory payload and Save persists it without changing the imported ZIP.
+- Keep composer customization limited to local bottom/horizontal insets on the existing fixed footer.
 
 ## Test preparation
 
 1. Finish or save current Codex work because one test restarts the official app.
 2. Quit Codex++ completely and disable the previous user blur script. The comparison must contain only CodexSkinLite.
-3. Extract `CodexSkinLite-0.1.2-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
+3. Extract `CodexSkinLite-0.1.3-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
 4. Because this build is unsigned, use Finder’s Open action if macOS blocks the first launch.
 5. Confirm Settings shows `/Applications/ChatGPT.app` as the Codex path.
 
@@ -63,6 +66,12 @@ Mark each row Pass or Fail and attach a screenshot/video for failures.
 | D1 | Resize and enter/leave full screen | Theme coverage and centering remain correct | Pending |
 | D2 | Quit and reopen CodexSkinLite, then Reconnect | Imported themes/settings persist and renderer reconnects | Pending |
 | D3 | Compare with Codex++ fully quit | Scrolling, typing, opening panels, and general UI should feel like native Codex rather than the previous slowed state | Pending |
+| E1 | Launch CodexSkinLite from the new 0.1.3 bundle | Settings opens once automatically and is in front; closing it does not create another window | Pass in startup smoke; user retest pending |
+| E2 | Click `远程主题画廊` beside ZIP import | The default browser opens `https://dreamskin.cc/gallery`; the app does not download the page itself | Pending |
+| E3 | Open `自定义主题…` for the active imported theme | Editor shows background, palette, component, and composer controls | Pending |
+| E4 | Change values and click `预览` | Current Codex updates; no customization file is written and the composer stays in its original DOM tree | Pending |
+| E5 | Click `保存`, reconnect, then reopen the editor | Values survive reconnect/relaunch and the original ZIP files are unchanged | Pending |
+| E6 | Click `恢复默认` → `预览` → `保存` | Package theme values return and the optional customization file is removed | Pending |
 
 ## Result report format
 

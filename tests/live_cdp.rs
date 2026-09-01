@@ -144,7 +144,7 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .unwrap();
     assert_eq!(
         applied.as_str().unwrap(),
-        r#"{"apiVersion":6,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerPosition":"fixed","footerWidth":"777px","titleTransparent":true}"#
+        r#"{"apiVersion":7,"style":true,"main":true,"image":true,"footerCount":1,"composerCount":1,"footerInThread":true,"composerInsideThread":true,"footerDocked":false,"footerPosition":"fixed","footerWidth":"777px","titleTransparent":true}"#
     );
     let scroll_geometry = session
         .evaluate(
