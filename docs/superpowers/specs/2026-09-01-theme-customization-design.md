@@ -150,12 +150,12 @@ original `theme.json` or `theme.css`. Its versioned shape is:
     "line": null
   },
   "surfaces": {
-    "main": { "opacity": null, "blurPx": 0, "radiusPx": null, "shadow": "none" },
-    "sidebar": { "opacity": null, "blurPx": 0, "radiusPx": null, "shadow": "none" },
-    "thread": { "opacity": null, "blurPx": 0, "radiusPx": null, "shadow": "none" },
-    "message": { "opacity": null, "blurPx": 0, "radiusPx": null, "shadow": "none" },
-    "composer": { "opacity": null, "blurPx": 0, "radiusPx": null, "shadow": "none" },
-    "header": { "opacity": null, "blurPx": 0, "radiusPx": null, "shadow": "none" }
+    "main": { "opacity": null, "blurPx": null, "radiusPx": null, "shadow": null },
+    "sidebar": { "opacity": null, "blurPx": null, "radiusPx": null, "shadow": null },
+    "thread": { "opacity": null, "blurPx": null, "radiusPx": null, "shadow": null },
+    "message": { "opacity": null, "blurPx": null, "radiusPx": null, "shadow": null },
+    "composer": { "opacity": null, "blurPx": null, "radiusPx": null, "shadow": null },
+    "header": { "opacity": null, "blurPx": null, "radiusPx": null, "shadow": null }
   },
   "composer": { "bottomInsetPx": 0, "horizontalInsetPx": 0 }
 }
