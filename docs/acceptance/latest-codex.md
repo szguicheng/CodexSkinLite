@@ -1,18 +1,18 @@
 # CodexSkinLite Manual Acceptance — 2026-09-01
 
-Status: image customization build ready; full user retest pending
+Status: focus-compositing fix build ready; full user retest pending
 
 ## Candidate
 
-- Source commits: `e51847bd`, `5a487341`, `75b1a956`, `b34da733`, `fa747f78`, `f95c4956`, `8f4acade`, `33ef9322`, `130c33cc`, `8afb9e6b`
+- Source commits: `e51847bd`, `5a487341`, `75b1a956`, `b34da733`, `fa747f78`, `f95c4956`, `8f4acade`, `33ef9322`, `130c33cc`, `8afb9e6b`, `e043ec09`
 - macOS: 26.5.2 (25F84)
 - Official Codex desktop bundle: `/Applications/ChatGPT.app`
 - Bundle ID: `com.openai.codex`
 - Codex version/build: 26.825.51511 (7377)
-- ZIP: `dist/CodexSkinLite-0.1.7-macos-arm64.zip`
-- SHA-256: `8de18c603c9fe89669b598c5022dce9bb366ce52f092ea4ede9cadfc9d12d5af`
-- Bundle: `0.1.7 (8)`, Mach-O arm64
-- Renderer API/bytes: `10` / `23,723`
+- ZIP: `dist/CodexSkinLite-0.1.8-macos-arm64.zip`
+- SHA-256: `70e0070ea2cd13e7e24c2e0cbab2083fb0adea92ce9cbc477dadf94349872a9e`
+- Bundle: `0.1.8 (9)`, Mach-O arm64
+- Renderer API/bytes: `11` / `23,757`
 - Renderer timers: 0
 - Automated Rust tests: 50 non-ignored tests passed
 - Automated renderer tests: 28 passed
@@ -37,13 +37,14 @@ Status: image customization build ready; full user retest pending
 - Add an explicit `无` appearance option. It clears the active theme and disables presentation; opening customization with `无` shows an empty draft.
 - Treat missing background-position overrides as package artwork focus values, so an empty draft does not replace the theme's original image focus.
 - Add a per-theme replacement image with bounded pixel offsets, cover/contain/stretch fill, and image-only opacity; the original ZIP background remains unchanged.
-- Keep the theme background visible when Codex loses focus by isolating the managed background layer; scroll the native customization editor to its background-image controls on open.
+- Keep the theme background visible when Codex loses focus by painting the managed image directly on `html, body`; use a background-only gradient for image opacity and avoid a negative z-index compositing layer. Scroll the native customization editor to its background-image controls on open.
+- Preserve the imported theme's component shadows by leaving its CSS unchanged; the previous negative background layer was the compositing regression that made those shadows look abnormal.
 
 ## Test preparation
 
 1. Finish or save current Codex work because one test restarts the official app.
 2. Quit Codex++ completely and disable the previous user blur script. The comparison must contain only CodexSkinLite.
-3. Extract `CodexSkinLite-0.1.7-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
+3. Extract `CodexSkinLite-0.1.8-macos-arm64.zip` and replace the old `CodexSkinLite.app` before opening it.
 4. Because this build is unsigned, use Finder’s Open action if macOS blocks the first launch.
 5. Confirm Settings shows `/Applications/ChatGPT.app` as the Codex path.
 
@@ -72,7 +73,7 @@ Mark each row Pass or Fail and attach a screenshot/video for failures.
 | D1 | Resize and enter/leave full screen | Theme coverage and centering remain correct | Pending |
 | D2 | Quit and reopen CodexSkinLite, then Reconnect | Imported themes/settings persist and renderer reconnects | Pending |
 | D3 | Compare with Codex++ fully quit | Scrolling, typing, opening panels, and general UI should feel like native Codex rather than the previous slowed state | Pending |
-| E1 | Launch CodexSkinLite from the new 0.1.7 bundle | Settings opens once automatically and is in front; closing it does not create another window | Pass in prior startup smoke; user retest pending |
+| E1 | Launch CodexSkinLite from the new 0.1.8 bundle | Settings opens once automatically and is in front; closing it does not create another window | Pass in prior startup smoke; user retest pending |
 | E2 | Click `远程主题画廊` beside ZIP import | The default browser opens `https://dreamskin.cc/gallery`; the app does not download the page itself | Pending |
 | E3 | Open `自定义主题…` for the active imported theme | Editor is prefilled from the selected theme's existing values; opening it with `无` shows a blank draft | Pending |
 | E7 | Choose a replacement image and adjust image options | The image controls are visible on open; Preview changes only the background image; Save persists the selected image, pixel offset, fill mode, and opacity without changing the original theme image | Pending |
