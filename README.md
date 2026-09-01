@@ -54,8 +54,9 @@ bash scripts/package-app.sh
 CodexSkinLite is licensed under `AGPL-3.0-only`. See `NOTICE` for Codex++
 attribution.
 
-## Unsigned application notice
+## Application signing
 
-Early `.app.zip` builds are not Developer ID signed or notarized. macOS may
-quarantine downloaded builds; inspect the source and build locally if that
-is not acceptable.
+Release ZIPs are signed with a Developer ID Application certificate but are
+not notarized yet. On another Mac, use Finder's Open action once if Gatekeeper
+shows an unidentified-developer warning. Direct opening without that warning
+requires a separately notarized release.
