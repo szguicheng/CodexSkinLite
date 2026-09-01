@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 10;
+  const API_VERSION = 11;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -306,9 +306,7 @@
       contain: "contain",
       stretch: "100% 100%",
     }[background.fillMode] || "cover";
-    const opacity = background.opacity == null
-      ? 1
-      : boundedNumber(background.opacity, 0, 100, 100) / 100;
+    const imageOverlay = 100 - boundedNumber(background.opacity, 0, 100, 100);
     setThemeVariable(
       "--ds-theme-background-image",
       `url("${state.blobUrl}")`,
@@ -320,13 +318,17 @@
       document.head.append(style);
     }
     style.textContent = `
-      html { isolation: isolate !important; }
-      html, body { background-image: none !important; }
-      html::before { content: ""; position: fixed; inset: 0; z-index: -1;
-        pointer-events: none; background-image: var(--ds-theme-background-image) !important;
-        background-position: ${cssOffset(positionX, offsetX)} ${cssOffset(positionY, offsetY)} !important;
-        background-size: ${fillMode} !important; background-repeat: no-repeat !important;
-        opacity: ${opacity}; }
+      html, body {
+        background-image:
+          linear-gradient(
+            color-mix(in srgb, var(--ds-theme-color-background) ${imageOverlay}%, transparent),
+            color-mix(in srgb, var(--ds-theme-color-background) ${imageOverlay}%, transparent)
+          ),
+          var(--ds-theme-background-image) !important;
+        background-position: 0 0, ${cssOffset(positionX, offsetX)} ${cssOffset(positionY, offsetY)} !important;
+        background-size: 100% 100%, ${fillMode} !important;
+        background-repeat: no-repeat, no-repeat !important;
+      }
       [data-csl-header-title-surface="true"] {
         background-color: transparent !important;
       }

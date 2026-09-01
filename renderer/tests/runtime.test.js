@@ -159,7 +159,7 @@ describe("Skin API", () => {
     await window.__CODEX_SKIN_LITE__.apply(evaPayload());
 
     expect(window.document.querySelector("#codex-skin-lite-theme").textContent).toContain(
-      "background-position: 44% 38%",
+      "background-position: 0 0, 44% 38%",
     );
   });
 
@@ -236,11 +236,14 @@ describe("composer regressions", () => {
     await window.__CODEX_SKIN_LITE__.apply(imageCustomizedEvaPayload());
 
     const css = window.document.querySelector("#codex-skin-lite-theme").textContent;
-    expect(css).toContain("background-position: calc(44% + 24px) calc(38% - 14px)");
-    expect(css).toContain("background-size: contain");
-    expect(css).toContain("opacity: 0.72");
-    expect(css).toContain("isolation: isolate");
-    expect(css).toContain("html::before");
+    expect(css).toContain("background-position: 0 0, calc(44% + 24px) calc(38% - 14px)");
+    expect(css).toContain("linear-gradient");
+    expect(css).toContain("color-mix");
+    expect(css).toContain("28%");
+    expect(css).toContain("background-size: 100% 100%, contain");
+    expect(css).not.toContain("opacity: 0.72");
+    expect(css).not.toContain("html::before");
+    expect(css).not.toContain("isolation: isolate");
   });
 
   it("applies and restores bounded customization values", async () => {
@@ -251,7 +254,7 @@ describe("composer regressions", () => {
     await window.__CODEX_SKIN_LITE__.apply(customizedEvaPayload(1));
 
     expect(window.document.documentElement.style.getPropertyValue("--ds-theme-color-accent")).toBe("#00aacc");
-    expect(window.document.querySelector("#codex-skin-lite-theme").textContent).toContain("background-position: 18% 72%");
+    expect(window.document.querySelector("#codex-skin-lite-theme").textContent).toContain("background-position: 0 0, 18% 72%");
     expect(footer.parentElement).toBe(originalParent);
     expect(footer.style.bottom).toBe("14px");
     expect(footer.style.left).toBe("22px");

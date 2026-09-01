@@ -150,7 +150,7 @@ async fn injects_current_theme_into_current_codex_and_cleans_up() {
         .await
         .unwrap();
     let applied: serde_json::Value = serde_json::from_str(applied.as_str().unwrap()).unwrap();
-    assert_eq!(applied["apiVersion"], 10);
+    assert_eq!(applied["apiVersion"], 11);
     assert_eq!(applied["style"], true);
     assert_eq!(applied["main"], true);
     assert_eq!(applied["image"], true);
