@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 9;
+  const API_VERSION = 10;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -320,6 +320,7 @@
       document.head.append(style);
     }
     style.textContent = `
+      html { isolation: isolate !important; }
       html, body { background-image: none !important; }
       html::before { content: ""; position: fixed; inset: 0; z-index: -1;
         pointer-events: none; background-image: var(--ds-theme-background-image) !important;

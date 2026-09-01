@@ -355,6 +355,10 @@ pub(super) fn show(
     );
 
     populate_controls(&document, &draft, SurfacePart::Main);
+    let _ = document.scrollRectToVisible(NSRect::new(
+        NSPoint::new(0.0, 720.0),
+        NSSize::new(640.0, 190.0),
+    ));
     window.makeKeyAndOrderFront(None);
     *slot.borrow_mut() = Some(window);
 }

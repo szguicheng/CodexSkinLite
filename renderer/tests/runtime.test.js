@@ -239,6 +239,7 @@ describe("composer regressions", () => {
     expect(css).toContain("background-position: calc(44% + 24px) calc(38% - 14px)");
     expect(css).toContain("background-size: contain");
     expect(css).toContain("opacity: 0.72");
+    expect(css).toContain("isolation: isolate");
     expect(css).toContain("html::before");
   });
 
