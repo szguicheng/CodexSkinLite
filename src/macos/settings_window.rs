@@ -243,6 +243,7 @@ pub(super) fn show(
     }));
 
     window.makeKeyAndOrderFront(None);
+    window.orderFrontRegardless();
     *slot.borrow_mut() = Some(window);
 }
 

@@ -253,10 +253,14 @@ impl ActionTarget {
     }
 }
 
+fn startup_activation_policy() -> NSApplicationActivationPolicy {
+    NSApplicationActivationPolicy::Accessory
+}
+
 pub(super) fn run(controller: ControllerHandle, state: Arc<AppKitState>) -> ! {
     let mtm = MainThreadMarker::new().expect("AppKit must run on the main thread");
     let app = NSApplication::sharedApplication(mtm);
-    app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+    app.setActivationPolicy(startup_activation_policy());
     let target = ActionTarget::new(controller, state);
     let status_item =
         NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
@@ -277,4 +281,17 @@ pub(super) fn run(controller: ControllerHandle, state: Arc<AppKitState>) -> ! {
     );
     app.run();
     std::process::exit(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_settings_start_keeps_accessory_activation_policy() {
+        assert_eq!(
+            startup_activation_policy(),
+            NSApplicationActivationPolicy::Accessory
+        );
+    }
 }
