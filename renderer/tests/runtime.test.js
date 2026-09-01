@@ -4,6 +4,7 @@ import {
   blueEyesPayload,
   customizedEvaPayload,
   evaPayload,
+  imageCustomizedEvaPayload,
   installRuntime,
   layoutPayload,
   nextFrame,
@@ -229,6 +230,18 @@ describe("Skin API", () => {
 });
 
 describe("composer regressions", () => {
+  it("applies background image source options without changing content opacity", async () => {
+    const window = installRuntime({ fixture: "modernThread" });
+
+    await window.__CODEX_SKIN_LITE__.apply(imageCustomizedEvaPayload());
+
+    const css = window.document.querySelector("#codex-skin-lite-theme").textContent;
+    expect(css).toContain("background-position: calc(44% + 24px) calc(38% - 14px)");
+    expect(css).toContain("background-size: contain");
+    expect(css).toContain("opacity: 0.72");
+    expect(css).toContain("html::before");
+  });
+
   it("applies and restores bounded customization values", async () => {
     const window = installRuntime({ fixture: "modernScrollingComposerWithRightPanel" });
     const footer = window.document.querySelector("[data-thread-scroll-footer]");

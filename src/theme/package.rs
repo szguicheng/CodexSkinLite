@@ -416,6 +416,33 @@ fn validate_image(name: &str, bytes: &[u8]) -> Result<(), ThemeError> {
     }
 }
 
+pub(crate) fn custom_image_name(path: &Path) -> Option<&'static str> {
+    match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "png" => Some("custom-background.png"),
+        "jpg" | "jpeg" => Some("custom-background.jpg"),
+        "webp" => Some("custom-background.webp"),
+        _ => None,
+    }
+}
+
+pub(crate) fn validate_custom_image(name: &str, bytes: &[u8]) -> Result<&'static str, ThemeError> {
+    if bytes.is_empty() || bytes.len() > IMAGE_LIMIT {
+        return Err(ThemeError::Limit("custom image exceeds 32 MiB".into()));
+    }
+    let (package_name, mime) = match name {
+        "custom-background.png" => ("background.png", "image/png"),
+        "custom-background.jpg" => ("background.jpg", "image/jpeg"),
+        "custom-background.webp" => ("background.webp", "image/webp"),
+        _ => {
+            return Err(ThemeError::InvalidImage(
+                "unsupported custom image name".into(),
+            ));
+        }
+    };
+    validate_image(package_name, bytes)?;
+    Ok(mime)
+}
+
 fn valid_theme_id(value: &str) -> bool {
     let len = value.len();
     (1..=128).contains(&len)

@@ -249,6 +249,32 @@ export function customizedEvaPayload(revision = 1) {
   return payload;
 }
 
+export function imageCustomizedEvaPayload(revision = 1) {
+  const payload = evaPayload(revision);
+  payload.theme.customization = {
+    schemaVersion: 1,
+    background: {
+      positionX: null,
+      positionY: null,
+      image: { fileName: "custom-background.png" },
+      offsetXPx: 24,
+      offsetYPx: -14,
+      fillMode: "contain",
+      opacity: 72,
+    },
+    colors: {
+      background: null,
+      panel: null,
+      accent: null,
+      text: null,
+      line: null,
+    },
+    surfaces: {},
+    composer: { bottomInsetPx: 0, horizontalInsetPx: 0 },
+  };
+  return payload;
+}
+
 export function layoutPayload(enabled, width = 900, revision = 1) {
   return {
     revision,

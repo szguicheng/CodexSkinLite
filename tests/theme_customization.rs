@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use codex_skin_lite::theme::{
-    BackgroundCustomization, ComposerCustomization, PaletteCustomization, ShadowPreset,
-    SurfaceCustomization, SurfacePart, ThemeCustomization, compile_customization_css,
+    BackgroundCustomization, BackgroundFillMode, BackgroundImageCustomization,
+    ComposerCustomization, PaletteCustomization, ShadowPreset, SurfaceCustomization, SurfacePart,
+    ThemeCustomization, compile_customization_css,
 };
 
 #[test]
@@ -11,9 +12,43 @@ fn default_customization_has_safe_baseline_values() {
 
     assert_eq!(value.background.position_x, None);
     assert_eq!(value.background.position_y, None);
+    assert_eq!(value.background.offset_x_px, 0);
+    assert_eq!(value.background.offset_y_px, 0);
+    assert_eq!(value.background.fill_mode, BackgroundFillMode::Cover);
+    assert_eq!(value.background.opacity, 100);
+    assert_eq!(value.background.image, None);
     assert_eq!(value.composer, ComposerCustomization::default());
     assert_eq!(value.colors, PaletteCustomization::default());
     assert!(value.surfaces.is_empty());
+}
+
+#[test]
+fn background_image_options_round_trip_through_the_customization_model() {
+    let value = ThemeCustomization {
+        background: BackgroundCustomization {
+            image: Some(BackgroundImageCustomization {
+                file_name: "custom-background.png".into(),
+                source_path: None,
+            }),
+            offset_x_px: -24,
+            offset_y_px: 18,
+            fill_mode: BackgroundFillMode::Contain,
+            opacity: 72,
+            ..BackgroundCustomization::default()
+        },
+        ..ThemeCustomization::default()
+    };
+
+    let json = serde_json::to_value(&value).unwrap();
+
+    assert_eq!(json["background"]["offsetXPx"], -24);
+    assert_eq!(json["background"]["offsetYPx"], 18);
+    assert_eq!(json["background"]["fillMode"], "contain");
+    assert_eq!(json["background"]["opacity"], 72);
+    assert_eq!(
+        json["background"]["image"]["fileName"],
+        "custom-background.png"
+    );
 }
 
 #[test]
@@ -67,6 +102,7 @@ fn normalization_clamps_layout_values_and_trims_optional_colors() {
         background: BackgroundCustomization {
             position_x: Some(255),
             position_y: Some(255),
+            ..BackgroundCustomization::default()
         },
         colors: PaletteCustomization {
             accent: Some("  #ABCDEF  ".into()),

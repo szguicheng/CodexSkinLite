@@ -4,9 +4,11 @@ mod safe_css;
 mod store;
 
 pub use customization::{
-    BackgroundCustomization, ComposerCustomization, PaletteCustomization, ShadowPreset,
-    SurfaceCustomization, SurfacePart, ThemeCustomization, compile_customization_css,
+    BackgroundCustomization, BackgroundFillMode, BackgroundImageCustomization,
+    ComposerCustomization, PaletteCustomization, ShadowPreset, SurfaceCustomization, SurfacePart,
+    ThemeCustomization, compile_customization_css,
 };
+pub(crate) use package::custom_image_name;
 pub use package::{
     DreamSkinPackageFile, DreamSkinPackageManifest, DreamSkinPackageProvenance,
     DreamSkinPackagePublisher, ThemeError, ValidatedThemePackage, validate_package,

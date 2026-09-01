@@ -16,10 +16,12 @@ renderer. It does not modify the official `Codex.app` bundle.
 2. Import a DreamSkin ZIP package, or open the remote theme gallery from the
    Appearance section: https://dreamskin.cc/gallery.
 3. Choose “无” to use no theme, or choose an imported theme ID and enable it.
-4. Open “自定义主题…” to adjust colors, surface appearance, background focus,
-   and the composer inset. A selected theme starts with its package values;
-   “无” opens an empty draft. Click “预览” to apply the draft temporarily,
-   then click “保存” to write it to the theme.
+4. Open “自定义主题…” to adjust colors, surface appearance, and the composer
+   inset. The background section also supports choosing a replacement image,
+   pixel X/Y offset, cover/contain/stretch fill, and image opacity. A selected
+   theme starts with its package values; “无” opens an empty draft. Click
+   “预览” to apply the draft temporarily, then click “保存” to write it to
+   the theme.
 5. Enable centered conversation width and enter a width from 320 to 4000 px.
 6. Use “Open Codex” from CodexSkinLite so Codex starts with a loopback CDP port.
 

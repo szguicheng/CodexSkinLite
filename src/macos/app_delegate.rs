@@ -87,6 +87,48 @@ define_class!(
             }
         }
 
+        #[unsafe(method(selectCustomizationFill:))]
+        fn select_customization_fill(&self, sender: &NSPopUpButton) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            match customization_window::select_fill(
+                window,
+                &self.ivars().state,
+                sender.indexOfSelectedItem(),
+            ) {
+                Ok(()) => {}
+                Err(error) => customization_window::set_status(window, &error),
+            }
+        }
+
+        #[unsafe(method(selectCustomizationImage:))]
+        fn select_customization_image(&self, _sender: Option<&AnyObject>) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            let mtm = MainThreadMarker::from(self);
+            let panel = NSOpenPanel::openPanel(mtm);
+            panel.setCanChooseFiles(true);
+            panel.setCanChooseDirectories(false);
+            panel.setAllowsMultipleSelection(false);
+            if panel.runModal() == objc2_app_kit::NSModalResponseOK
+                && let Some(url) = panel.URLs().firstObject()
+                && let Some(path) = url.path()
+            {
+                let path = std::path::PathBuf::from(path.to_string());
+                if let Err(error) = customization_window::set_image_path(
+                    window,
+                    &self.ivars().state,
+                    path,
+                ) {
+                    customization_window::set_status(window, &error);
+                }
+            }
+        }
+
         #[unsafe(method(previewCustomization:))]
         fn preview_customization(&self, _sender: Option<&AnyObject>) {
             let windows = self.ivars().customization_window.borrow();

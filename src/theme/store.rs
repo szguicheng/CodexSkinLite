@@ -10,8 +10,10 @@ use sha2::{Digest, Sha256};
 use crate::paths::AppPaths;
 
 use super::customization::package_defaults;
+use super::package::{custom_image_name, validate_custom_image};
 use super::{
-    ThemeCustomization, ThemeError, compile_customization_css, compile_safe_css, validate_package,
+    BackgroundImageCustomization, ThemeCustomization, ThemeError, compile_customization_css,
+    compile_safe_css, validate_package,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -213,7 +215,7 @@ impl ThemeStore {
         validate_stored_id(id)?;
         let directory = self.paths.themes_dir().join(id);
         ensure_real_directory(&directory)?;
-        let customization = customization.clone().normalized()?;
+        let mut customization = customization.clone().normalized()?;
         let path = directory.join("customization.json");
         if customization.is_default() {
             match fs::remove_file(&path) {
@@ -221,12 +223,16 @@ impl ThemeStore {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(anyhow_error(error)),
             }
+            remove_custom_images(&directory, None)?;
             return Ok(());
         }
+        let custom_image = prepare_custom_image(&directory, &mut customization)?;
         let bytes = serde_json::to_vec_pretty(&customization)
             .map_err(|error| ThemeError::InvalidCustomization(error.to_string()))?;
         write_sync(&directory.join("customization.json.tmp"), &bytes)?;
-        fs::rename(directory.join("customization.json.tmp"), path).map_err(anyhow_error)
+        fs::rename(directory.join("customization.json.tmp"), path).map_err(anyhow_error)?;
+        let _ = remove_custom_images(&directory, custom_image.as_deref());
+        Ok(())
     }
 
     fn load_payload_inner(
@@ -263,8 +269,7 @@ impl ThemeStore {
             compiled_css.push('\n');
             compiled_css.push_str(&customization_css);
         }
-        let (image_path, image_mime) = find_image(&directory)?;
-        let image = read_required(&image_path)?;
+        let (image_mime, image) = load_image(&directory, customization.background.image.as_ref())?;
         let mut hasher = Sha256::new();
         hasher.update(id.as_bytes());
         hasher.update(&theme_bytes);
@@ -345,6 +350,84 @@ fn find_image(directory: &Path) -> Result<(PathBuf, &'static str), ThemeError> {
         ));
     }
     Ok(candidates.into_iter().next().expect("one candidate"))
+}
+
+fn load_image(
+    directory: &Path,
+    customization: Option<&BackgroundImageCustomization>,
+) -> Result<(&'static str, Vec<u8>), ThemeError> {
+    let Some(customization) = customization else {
+        let (path, mime) = find_image(directory)?;
+        return Ok((mime, read_required(&path)?));
+    };
+    if let Some(source) = customization.source_path.as_deref() {
+        let bytes = fs::read(source)
+            .map_err(|error| ThemeError::InvalidImage(format!("{}: {error}", source.display())))?;
+        let name = custom_image_name(source).ok_or_else(|| {
+            ThemeError::InvalidImage("custom image must be PNG, JPG, or WebP".into())
+        })?;
+        return Ok((validate_custom_image(name, &bytes)?, bytes));
+    }
+    let path = custom_image_path(directory, &customization.file_name)?;
+    let bytes = read_required(&path)?;
+    Ok((
+        validate_custom_image(&customization.file_name, &bytes)?,
+        bytes,
+    ))
+}
+
+fn prepare_custom_image(
+    directory: &Path,
+    customization: &mut ThemeCustomization,
+) -> Result<Option<String>, ThemeError> {
+    let Some(image) = customization.background.image.as_mut() else {
+        return Ok(None);
+    };
+    if let Some(source) = image.source_path.take() {
+        let bytes = fs::read(&source)
+            .map_err(|error| ThemeError::InvalidImage(format!("{}: {error}", source.display())))?;
+        let name = custom_image_name(&source).ok_or_else(|| {
+            ThemeError::InvalidImage("custom image must be PNG, JPG, or WebP".into())
+        })?;
+        validate_custom_image(name, &bytes)?;
+        write_sync(&directory.join(format!("{name}.tmp")), &bytes)?;
+        fs::rename(directory.join(format!("{name}.tmp")), directory.join(name))
+            .map_err(anyhow_error)?;
+        image.file_name = name.into();
+    } else {
+        let path = custom_image_path(directory, &image.file_name)?;
+        let bytes = read_required(&path)?;
+        validate_custom_image(&image.file_name, &bytes)?;
+    }
+    Ok(Some(image.file_name.clone()))
+}
+
+fn custom_image_path(directory: &Path, name: &str) -> Result<PathBuf, ThemeError> {
+    if !matches!(
+        name,
+        "custom-background.png" | "custom-background.jpg" | "custom-background.webp"
+    ) {
+        return Err(ThemeError::InvalidImage("invalid custom image name".into()));
+    }
+    Ok(directory.join(name))
+}
+
+fn remove_custom_images(directory: &Path, keep: Option<&str>) -> Result<(), ThemeError> {
+    for name in [
+        "custom-background.png",
+        "custom-background.jpg",
+        "custom-background.webp",
+    ] {
+        if keep == Some(name) {
+            continue;
+        }
+        match fs::remove_file(directory.join(name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(anyhow_error(error)),
+        }
+    }
+    Ok(())
 }
 
 fn validate_stored_id(id: &str) -> Result<(), ThemeError> {

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,6 +64,23 @@ pub enum ShadowPreset {
     Strong,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BackgroundFillMode {
+    #[default]
+    Cover,
+    Contain,
+    Stretch,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields, default)]
+pub struct BackgroundImageCustomization {
+    pub file_name: String,
+    #[serde(skip)]
+    pub source_path: Option<PathBuf>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct ThemeCustomization {
@@ -73,11 +91,30 @@ pub struct ThemeCustomization {
     pub composer: ComposerCustomization,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct BackgroundCustomization {
     pub position_x: Option<u8>,
     pub position_y: Option<u8>,
+    pub offset_x_px: i16,
+    pub offset_y_px: i16,
+    pub fill_mode: BackgroundFillMode,
+    pub opacity: u8,
+    pub image: Option<BackgroundImageCustomization>,
+}
+
+impl Default for BackgroundCustomization {
+    fn default() -> Self {
+        Self {
+            position_x: None,
+            position_y: None,
+            offset_x_px: 0,
+            offset_y_px: 0,
+            fill_mode: BackgroundFillMode::Cover,
+            opacity: 100,
+            image: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -128,6 +165,9 @@ impl ThemeCustomization {
         }
         self.background.position_x = self.background.position_x.map(|value| value.min(100));
         self.background.position_y = self.background.position_y.map(|value| value.min(100));
+        self.background.offset_x_px = self.background.offset_x_px.clamp(-2000, 2000);
+        self.background.offset_y_px = self.background.offset_y_px.clamp(-2000, 2000);
+        self.background.opacity = self.background.opacity.min(100);
         self.colors.background = normalize_color("background", self.colors.background)?;
         self.colors.panel = normalize_color("panel", self.colors.panel)?;
         self.colors.accent = normalize_color("accent", self.colors.accent)?;
@@ -159,6 +199,19 @@ impl ThemeCustomization {
         if overrides.background.position_y.is_some() {
             self.background.position_y = overrides.background.position_y;
         }
+        if overrides.background.offset_x_px != 0 {
+            self.background.offset_x_px = overrides.background.offset_x_px;
+        }
+        if overrides.background.offset_y_px != 0 {
+            self.background.offset_y_px = overrides.background.offset_y_px;
+        }
+        if overrides.background.fill_mode != BackgroundFillMode::Cover {
+            self.background.fill_mode = overrides.background.fill_mode;
+        }
+        if overrides.background.opacity != 100 {
+            self.background.opacity = overrides.background.opacity;
+        }
+        self.background.image = overrides.background.image.clone().or(self.background.image);
         self.colors.background = overrides
             .colors
             .background

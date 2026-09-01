@@ -144,6 +144,7 @@ async fn preview_customization_applies_without_writing_the_file() {
         background: codex_skin_lite::theme::BackgroundCustomization {
             position_x: Some(12),
             position_y: Some(84),
+            ..Default::default()
         },
         ..Default::default()
     };

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use objc2::rc::Retained;
@@ -11,12 +12,17 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
-use crate::theme::{ShadowPreset, SurfacePart, ThemeCustomization};
+use crate::theme::{
+    BackgroundFillMode, BackgroundImageCustomization, ShadowPreset, SurfacePart, ThemeCustomization,
+};
 
 use super::AppKitState;
 
 const TAG_BACKGROUND_X: isize = 1001;
 const TAG_BACKGROUND_Y: isize = 1002;
+const TAG_BACKGROUND_OPACITY: isize = 1003;
+const TAG_BACKGROUND_FILL_MODE: isize = 1004;
+const TAG_BACKGROUND_IMAGE: isize = 1005;
 const TAG_COLOR_BACKGROUND: isize = 1010;
 const TAG_COLOR_PANEL: isize = 1011;
 const TAG_COLOR_ACCENT: isize = 1012;
@@ -94,31 +100,65 @@ pub(super) fn show(
         mtm,
     );
 
+    add_label(&document, "背景图片", 24.0, 858.0, 300.0, 24.0, mtm);
+    add_button(
+        &document,
+        "选择图片…",
+        24.0,
+        818.0,
+        110.0,
+        target,
+        sel!(selectCustomizationImage:),
+        mtm,
+    );
     add_label(
         &document,
-        "背景图位置（百分比）",
-        24.0,
-        858.0,
-        300.0,
-        24.0,
+        &format_image_status(draft.background.image.as_ref()),
+        148.0,
+        822.0,
+        420.0,
+        22.0,
         mtm,
-    );
+    )
+    .setTag(TAG_BACKGROUND_IMAGE);
     add_labeled_field(
         &document,
-        "水平",
+        "偏移 X px",
         TAG_BACKGROUND_X,
-        &format_optional_u8(draft.background.position_x),
+        &draft.background.offset_x_px.to_string(),
         24.0,
-        818.0,
+        778.0,
         mtm,
     );
     add_labeled_field(
         &document,
-        "垂直",
+        "偏移 Y px",
         TAG_BACKGROUND_Y,
-        &format_optional_u8(draft.background.position_y),
+        &draft.background.offset_y_px.to_string(),
         220.0,
-        818.0,
+        778.0,
+        mtm,
+    );
+    add_label(&document, "填充", 416.0, 782.0, 50.0, 22.0, mtm);
+    let fill_popup = add_popup(
+        &document,
+        TAG_BACKGROUND_FILL_MODE,
+        &["覆盖填充", "完整显示", "拉伸填充"],
+        466.0,
+        778.0,
+        130.0,
+        target,
+        sel!(selectCustomizationFill:),
+        mtm,
+    );
+    fill_popup.selectItemAtIndex(fill_mode_index(draft.background.fill_mode));
+    add_labeled_field(
+        &document,
+        "透明度 0-100",
+        TAG_BACKGROUND_OPACITY,
+        &draft.background.opacity.to_string(),
+        24.0,
+        730.0,
         mtm,
     );
 
@@ -126,7 +166,7 @@ pub(super) fn show(
         &document,
         "颜色覆盖（留空表示跟随主题）",
         24.0,
-        770.0,
+        680.0,
         360.0,
         24.0,
         mtm,
@@ -137,7 +177,7 @@ pub(super) fn show(
         TAG_COLOR_BACKGROUND,
         draft.colors.background.as_deref().unwrap_or_default(),
         24.0,
-        730.0,
+        640.0,
         mtm,
     );
     add_labeled_field(
@@ -146,7 +186,7 @@ pub(super) fn show(
         TAG_COLOR_PANEL,
         draft.colors.panel.as_deref().unwrap_or_default(),
         220.0,
-        730.0,
+        640.0,
         mtm,
     );
     add_labeled_field(
@@ -155,7 +195,7 @@ pub(super) fn show(
         TAG_COLOR_ACCENT,
         draft.colors.accent.as_deref().unwrap_or_default(),
         416.0,
-        730.0,
+        640.0,
         mtm,
     );
     add_labeled_field(
@@ -164,7 +204,7 @@ pub(super) fn show(
         TAG_COLOR_TEXT,
         draft.colors.text.as_deref().unwrap_or_default(),
         24.0,
-        682.0,
+        592.0,
         mtm,
     );
     add_labeled_field(
@@ -173,11 +213,11 @@ pub(super) fn show(
         TAG_COLOR_LINE,
         draft.colors.line.as_deref().unwrap_or_default(),
         220.0,
-        682.0,
+        592.0,
         mtm,
     );
 
-    add_label(&document, "组件样式", 24.0, 620.0, 300.0, 24.0, mtm);
+    add_label(&document, "组件样式", 24.0, 530.0, 300.0, 24.0, mtm);
     let component_popup = add_popup(
         &document,
         TAG_SURFACE_PART,
@@ -186,7 +226,7 @@ pub(super) fn show(
             .map(SurfacePart::display_name)
             .collect::<Vec<_>>(),
         24.0,
-        580.0,
+        490.0,
         230.0,
         target,
         sel!(selectCustomizationComponent:),
@@ -199,7 +239,7 @@ pub(super) fn show(
         TAG_SURFACE_OPACITY,
         "",
         24.0,
-        532.0,
+        442.0,
         mtm,
     );
     add_labeled_field(
@@ -208,7 +248,7 @@ pub(super) fn show(
         TAG_SURFACE_BLUR,
         "",
         220.0,
-        532.0,
+        442.0,
         mtm,
     );
     add_labeled_field(
@@ -217,16 +257,16 @@ pub(super) fn show(
         TAG_SURFACE_RADIUS,
         "",
         416.0,
-        532.0,
+        442.0,
         mtm,
     );
-    add_label(&document, "阴影", 24.0, 492.0, 70.0, 22.0, mtm);
+    add_label(&document, "阴影", 24.0, 402.0, 70.0, 22.0, mtm);
     let shadow_popup = add_popup(
         &document,
         TAG_SURFACE_SHADOW,
         &["跟随主题", "无阴影", "柔和", "明显"],
         96.0,
-        488.0,
+        398.0,
         180.0,
         target,
         sel!(selectCustomizationComponent:),
@@ -238,14 +278,14 @@ pub(super) fn show(
     }
     shadow_popup.selectItemAtIndex(0);
 
-    add_label(&document, "输入框位置", 24.0, 432.0, 300.0, 24.0, mtm);
+    add_label(&document, "输入框位置", 24.0, 342.0, 300.0, 24.0, mtm);
     add_labeled_field(
         &document,
         "距底部 px",
         TAG_COMPOSER_BOTTOM,
         &draft.composer.bottom_inset_px.to_string(),
         24.0,
-        392.0,
+        302.0,
         mtm,
     );
     add_labeled_field(
@@ -254,7 +294,7 @@ pub(super) fn show(
         TAG_COMPOSER_HORIZONTAL,
         &draft.composer.horizontal_inset_px.to_string(),
         220.0,
-        392.0,
+        302.0,
         mtm,
     );
 
@@ -266,7 +306,7 @@ pub(super) fn show(
             "当前未选择主题：此处显示空白草稿"
         },
         24.0,
-        330.0,
+        240.0,
         560.0,
         24.0,
         mtm,
@@ -276,7 +316,7 @@ pub(super) fn show(
         &document,
         "预览",
         24.0,
-        270.0,
+        180.0,
         100.0,
         target,
         sel!(previewCustomization:),
@@ -286,7 +326,7 @@ pub(super) fn show(
         &document,
         "保存",
         140.0,
-        270.0,
+        180.0,
         100.0,
         target,
         sel!(saveCustomization:),
@@ -297,7 +337,7 @@ pub(super) fn show(
         &document,
         "恢复默认",
         256.0,
-        270.0,
+        180.0,
         120.0,
         target,
         sel!(resetCustomization:),
@@ -307,7 +347,7 @@ pub(super) fn show(
         &document,
         "关闭",
         392.0,
-        270.0,
+        180.0,
         100.0,
         target,
         sel!(closeCustomization:),
@@ -327,12 +367,16 @@ pub(super) fn collect_draft(
     let content = window
         .contentView()
         .ok_or_else(|| "自定义窗口内容不可用".to_string())?;
-    draft.background.position_x =
-        read_optional_bounded_u16(&content, TAG_BACKGROUND_X, "背景水平", 100)?
-            .map(|value| value as u8);
-    draft.background.position_y =
-        read_optional_bounded_u16(&content, TAG_BACKGROUND_Y, "背景垂直", 100)?
-            .map(|value| value as u8);
+    draft.background.offset_x_px =
+        read_bounded_i16(&content, TAG_BACKGROUND_X, "图片水平偏移", -2000, 2000)?;
+    draft.background.offset_y_px =
+        read_bounded_i16(&content, TAG_BACKGROUND_Y, "图片垂直偏移", -2000, 2000)?;
+    draft.background.opacity =
+        read_bounded_u16(&content, TAG_BACKGROUND_OPACITY, "图片透明度", 100)? as u8;
+    let fill_mode = popup(&content, TAG_BACKGROUND_FILL_MODE)
+        .ok_or_else(|| "图片填充控件不可用".to_string())?
+        .indexOfSelectedItem();
+    draft.background.fill_mode = fill_mode_from_index(fill_mode)?;
     draft.colors.background = read_optional_color(&content, TAG_COLOR_BACKGROUND, "背景色")?;
     draft.colors.panel = read_optional_color(&content, TAG_COLOR_PANEL, "面板色")?;
     draft.colors.accent = read_optional_color(&content, TAG_COLOR_ACCENT, "强调色")?;
@@ -383,6 +427,44 @@ pub(super) fn select_surface(
     Ok(())
 }
 
+pub(super) fn select_fill(
+    window: &NSWindow,
+    state: &AppKitState,
+    index: isize,
+) -> Result<(), String> {
+    let mut draft = collect_draft(window, state)?;
+    draft.background.fill_mode = fill_mode_from_index(index)?;
+    state.set_customization_draft(draft);
+    Ok(())
+}
+
+pub(super) fn set_image_path(
+    window: &NSWindow,
+    state: &AppKitState,
+    path: PathBuf,
+) -> Result<(), String> {
+    if !crate::theme::custom_image_name(&path).is_some() {
+        return Err("图片必须是 PNG、JPG 或 WebP".into());
+    }
+    let mut draft = state.customization_draft().unwrap_or_default();
+    draft.background.image = Some(BackgroundImageCustomization {
+        file_name: path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "已选择图片".into()),
+        source_path: Some(path),
+    });
+    state.set_customization_draft(draft.clone());
+    if let Some(content) = window.contentView()
+        && let Some(field) = text_field(&content, TAG_BACKGROUND_IMAGE)
+    {
+        field.setStringValue(&NSString::from_str(&format_image_status(
+            draft.background.image.as_ref(),
+        )));
+    }
+    Ok(())
+}
+
 pub(super) fn reset_draft(window: &NSWindow, state: &AppKitState) {
     let draft = ThemeCustomization::default();
     state.set_customization_draft(draft.clone());
@@ -404,12 +486,25 @@ fn populate_controls(content: &NSView, draft: &ThemeCustomization, surface: Surf
     set_text_field(
         content,
         TAG_BACKGROUND_X,
-        &format_optional_u8(draft.background.position_x),
+        &draft.background.offset_x_px.to_string(),
     );
     set_text_field(
         content,
         TAG_BACKGROUND_Y,
-        &format_optional_u8(draft.background.position_y),
+        &draft.background.offset_y_px.to_string(),
+    );
+    if let Some(field) = text_field(content, TAG_BACKGROUND_IMAGE) {
+        field.setStringValue(&NSString::from_str(&format_image_status(
+            draft.background.image.as_ref(),
+        )));
+    }
+    if let Some(popup) = popup(content, TAG_BACKGROUND_FILL_MODE) {
+        popup.selectItemAtIndex(fill_mode_index(draft.background.fill_mode));
+    }
+    set_text_field(
+        content,
+        TAG_BACKGROUND_OPACITY,
+        &draft.background.opacity.to_string(),
     );
     set_text_field(
         content,
@@ -494,8 +589,27 @@ fn populate_surface_controls(content: &NSView, draft: &ThemeCustomization, surfa
     }
 }
 
-fn format_optional_u8(value: Option<u8>) -> String {
-    value.map(|value| value.to_string()).unwrap_or_default()
+fn format_image_status(image: Option<&BackgroundImageCustomization>) -> String {
+    image
+        .map(|image| format!("已选择：{}", image.file_name))
+        .unwrap_or_else(|| "跟随主题原图".into())
+}
+
+fn fill_mode_index(mode: BackgroundFillMode) -> isize {
+    match mode {
+        BackgroundFillMode::Cover => 0,
+        BackgroundFillMode::Contain => 1,
+        BackgroundFillMode::Stretch => 2,
+    }
+}
+
+fn fill_mode_from_index(index: isize) -> Result<BackgroundFillMode, String> {
+    match index {
+        0 => Ok(BackgroundFillMode::Cover),
+        1 => Ok(BackgroundFillMode::Contain),
+        2 => Ok(BackgroundFillMode::Stretch),
+        _ => Err("图片填充选项无效".into()),
+    }
 }
 
 fn read_optional_color(content: &NSView, tag: isize, name: &str) -> Result<Option<String>, String> {
@@ -540,6 +654,27 @@ fn read_bounded_u16(content: &NSView, tag: isize, name: &str, maximum: u16) -> R
         .parse::<u16>()
         .map_err(|_| format!("{name}必须是数字"))?;
     Ok(parsed.min(maximum))
+}
+
+fn read_bounded_i16(
+    content: &NSView,
+    tag: isize,
+    name: &str,
+    minimum: i32,
+    maximum: i32,
+) -> Result<i16, String> {
+    let value = text_field(content, tag)
+        .ok_or_else(|| format!("{name}控件不可用"))?
+        .stringValue()
+        .to_string();
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(format!("{name}不能为空"));
+    }
+    let parsed = value
+        .parse::<i32>()
+        .map_err(|_| format!("{name}必须是数字"))?;
+    Ok(parsed.clamp(minimum, maximum) as i16)
 }
 
 fn text_field(content: &NSView, tag: isize) -> Option<Retained<NSTextField>> {

@@ -1,6 +1,7 @@
 mod fixtures;
 
 use codex_skin_lite::theme::ThemeError;
+use codex_skin_lite::theme::{BackgroundImageCustomization, ThemeCustomization};
 
 #[test]
 fn import_publishes_complete_theme_atomically() {
@@ -55,6 +56,7 @@ fn customization_round_trips_without_changing_the_theme_package() {
         background: codex_skin_lite::theme::BackgroundCustomization {
             position_x: Some(18),
             position_y: Some(72),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -90,5 +92,45 @@ fn corrupt_customization_falls_back_to_defaults() {
     assert_eq!(
         env.store.load_customization("eva-warm-cream").unwrap(),
         codex_skin_lite::theme::ThemeCustomization::default()
+    );
+}
+
+#[test]
+fn selected_background_image_is_copied_without_replacing_the_theme_image() {
+    let env = fixtures::theme_environment();
+    env.store
+        .import_zip_bytes(&fixtures::valid_theme_zip())
+        .unwrap();
+    let source = env._dir.path().join("selected.png");
+    std::fs::write(&source, fixtures::ThemeZipOptions::valid().image_bytes).unwrap();
+
+    let customization = ThemeCustomization {
+        background: codex_skin_lite::theme::BackgroundCustomization {
+            image: Some(BackgroundImageCustomization {
+                file_name: "selected.png".into(),
+                source_path: Some(source),
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    env.store
+        .save_customization("eva-warm-cream", &customization)
+        .unwrap();
+
+    let theme_dir = env.paths.themes_dir().join("eva-warm-cream");
+    assert!(theme_dir.join("background.png").is_file());
+    assert!(theme_dir.join("custom-background.png").is_file());
+    assert_eq!(
+        env.store
+            .load_customization("eva-warm-cream")
+            .unwrap()
+            .background
+            .image
+            .as_ref()
+            .unwrap()
+            .file_name,
+        "custom-background.png"
     );
 }

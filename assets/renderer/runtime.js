@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 8;
+  const API_VERSION = 9;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -295,6 +295,20 @@
     const positionY = background.positionY == null
       ? packagePositionY
       : boundedNumber(background.positionY, 0, 100, packagePositionY);
+    const offsetX = boundedNumber(background.offsetXPx, -2000, 2000, 0);
+    const offsetY = boundedNumber(background.offsetYPx, -2000, 2000, 0);
+    const cssOffset = (percentage, offset) =>
+      offset === 0
+        ? `${percentage}%`
+        : `calc(${percentage}% ${offset > 0 ? "+" : "-"} ${Math.abs(offset)}px)`;
+    const fillMode = {
+      cover: "cover",
+      contain: "contain",
+      stretch: "100% 100%",
+    }[background.fillMode] || "cover";
+    const opacity = background.opacity == null
+      ? 1
+      : boundedNumber(background.opacity, 0, 100, 100) / 100;
     setThemeVariable(
       "--ds-theme-background-image",
       `url("${state.blobUrl}")`,
@@ -306,9 +320,12 @@
       document.head.append(style);
     }
     style.textContent = `
-      html, body { background-image: var(--ds-theme-background-image) !important;
-        background-position: ${positionX}% ${positionY}% !important;
-        background-size: cover !important; }
+      html, body { background-image: none !important; }
+      html::before { content: ""; position: fixed; inset: 0; z-index: -1;
+        pointer-events: none; background-image: var(--ds-theme-background-image) !important;
+        background-position: ${cssOffset(positionX, offsetX)} ${cssOffset(positionY, offsetY)} !important;
+        background-size: ${fillMode} !important; background-repeat: no-repeat !important;
+        opacity: ${opacity}; }
       [data-csl-header-title-surface="true"] {
         background-color: transparent !important;
       }
