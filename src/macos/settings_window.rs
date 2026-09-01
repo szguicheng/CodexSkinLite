@@ -66,6 +66,7 @@ pub(super) fn show(
         NSRect::new(NSPoint::new(150.0, 388.0), NSSize::new(180.0, 30.0)),
         false,
     );
+    popup.addItemWithTitle(&NSString::from_str("无"));
     for theme in snapshot
         .as_ref()
         .map(|value| value.themes.as_slice())
@@ -78,6 +79,8 @@ pub(super) fn show(
         .and_then(|value| value.settings.active_theme_id.as_deref())
     {
         popup.selectItemWithTitle(&NSString::from_str(id));
+    } else {
+        popup.selectItemWithTitle(&NSString::from_str("无"));
     }
     unsafe {
         popup.setTarget(Some(target));
@@ -115,11 +118,7 @@ pub(super) fn show(
         sel!(customizeTheme:),
         mtm,
     );
-    customize_theme.setEnabled(
-        snapshot
-            .as_ref()
-            .is_some_and(|value| value.settings.active_theme_id.is_some()),
-    );
+    customize_theme.setEnabled(true);
     if snapshot.as_ref().is_some_and(|value| {
         matches!(
             value.connection,
@@ -279,8 +278,8 @@ impl SettingsUi {
             &snapshot.settings.conversation_max_width.to_string(),
         ));
         self.theme_popup.removeAllItems();
-        self.customize_theme
-            .setEnabled(snapshot.settings.active_theme_id.is_some());
+        self.customize_theme.setEnabled(true);
+        self.theme_popup.addItemWithTitle(&NSString::from_str("无"));
         for theme in &snapshot.themes {
             self.theme_popup
                 .addItemWithTitle(&NSString::from_str(&theme.id));
@@ -288,6 +287,9 @@ impl SettingsUi {
         if let Some(id) = &snapshot.settings.active_theme_id {
             self.theme_popup
                 .selectItemWithTitle(&NSString::from_str(id));
+        } else {
+            self.theme_popup
+                .selectItemWithTitle(&NSString::from_str("无"));
         }
     }
 }

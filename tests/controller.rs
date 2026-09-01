@@ -7,7 +7,7 @@ use codex_skin_lite::model::{AppSettings, AppSnapshot, ConnectionState};
 use codex_skin_lite::paths::AppPaths;
 use codex_skin_lite::renderer::RendererPayload;
 use codex_skin_lite::settings::SettingsStore;
-use codex_skin_lite::theme::ThemeStore;
+use codex_skin_lite::theme::{SurfacePart, ThemeStore};
 
 #[tokio::test]
 async fn failed_theme_apply_keeps_previous_active_theme() {
@@ -64,6 +64,41 @@ async fn opening_codex_applies_saved_settings_to_renderer() {
     assert_eq!(applied[0].conversation_max_width, 777);
 }
 
+#[test]
+fn selected_theme_snapshot_contains_package_values_for_editor() {
+    let env = controller_environment(false);
+    let snapshot = env.sink.snapshots.lock().unwrap().last().unwrap().clone();
+
+    assert_eq!(
+        snapshot.active_theme_customization.background.position_x,
+        Some(44)
+    );
+    assert_eq!(
+        snapshot.active_theme_customization.background.position_y,
+        Some(38)
+    );
+    assert_eq!(
+        snapshot
+            .active_theme_customization
+            .colors
+            .background
+            .as_deref(),
+        Some("#fffaf0")
+    );
+    assert_eq!(
+        snapshot.active_theme_customization.colors.panel.as_deref(),
+        Some("#fff8e8")
+    );
+    assert_eq!(
+        snapshot
+            .active_theme_customization
+            .surfaces
+            .get(&SurfacePart::Composer)
+            .and_then(|surface| surface.radius_px),
+        Some(18)
+    );
+}
+
 #[tokio::test]
 async fn reconnect_resends_saved_settings_after_renderer_revision_survives_restart() {
     let mut env = controller_environment(false);
@@ -107,8 +142,8 @@ async fn preview_customization_applies_without_writing_the_file() {
     let mut env = controller_environment(false);
     let candidate = codex_skin_lite::theme::ThemeCustomization {
         background: codex_skin_lite::theme::BackgroundCustomization {
-            position_x: 12,
-            position_y: 84,
+            position_x: Some(12),
+            position_y: Some(84),
         },
         ..Default::default()
     };
@@ -198,6 +233,20 @@ async fn first_import_selects_theme_without_enabling_it() {
     assert!(!stored.theme_enabled);
 }
 
+#[tokio::test]
+async fn selecting_no_theme_clears_selection_and_disables_theme() {
+    let mut env = controller_environment(false);
+
+    env.controller
+        .handle(AppCommand::ActivateTheme(String::new()))
+        .await
+        .unwrap();
+
+    let stored = env.settings.load().unwrap();
+    assert_eq!(stored.active_theme_id, None);
+    assert!(!stored.theme_enabled);
+}
+
 #[test]
 fn startup_selects_the_only_imported_theme_when_settings_are_empty() {
     let dir = tempfile::tempdir().unwrap();
@@ -217,7 +266,7 @@ fn startup_selects_the_only_imported_theme_when_settings_are_empty() {
     Controller::new(settings.clone(), themes, runtime, sink).unwrap();
 
     let stored = settings.load().unwrap();
-    assert_eq!(stored.active_theme_id.as_deref(), Some("eva-warm-cream"));
+    assert_eq!(stored.active_theme_id, None);
     assert!(!stored.theme_enabled);
 }
 

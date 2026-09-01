@@ -53,8 +53,8 @@ fn customization_round_trips_without_changing_the_theme_package() {
         .unwrap();
     let customization = codex_skin_lite::theme::ThemeCustomization {
         background: codex_skin_lite::theme::BackgroundCustomization {
-            position_x: 18,
-            position_y: 72,
+            position_x: Some(18),
+            position_y: Some(72),
         },
         ..Default::default()
     };

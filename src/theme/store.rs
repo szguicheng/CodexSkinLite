@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 
 use crate::paths::AppPaths;
 
+use super::customization::package_defaults;
 use super::{
     ThemeCustomization, ThemeError, compile_customization_css, compile_safe_css, validate_package,
 };
@@ -179,6 +180,29 @@ impl ThemeStore {
                 Ok(ThemeCustomization::default())
             }
         }
+    }
+
+    pub fn load_editor_customization(&self, id: &str) -> Result<ThemeCustomization, ThemeError> {
+        let defaults = self.load_theme_defaults(id)?;
+        let saved = self.load_customization(id)?;
+        Ok(defaults.with_saved_overrides(&saved))
+    }
+
+    fn load_theme_defaults(&self, id: &str) -> Result<ThemeCustomization, ThemeError> {
+        validate_stored_id(id)?;
+        let directory = self.paths.themes_dir().join(id);
+        ensure_real_directory(&directory)?;
+        let theme_bytes = read_required(&directory.join("theme.json"))?;
+        let theme = serde_json::from_slice::<serde_json::Value>(&theme_bytes)
+            .map_err(|error| ThemeError::InvalidStoredTheme(format!("theme.json: {error}")))?;
+        if theme.get("id").and_then(serde_json::Value::as_str) != Some(id) {
+            return Err(ThemeError::InvalidStoredTheme(
+                "theme.json id does not match directory".into(),
+            ));
+        }
+        let css = String::from_utf8(read_required(&directory.join("theme.css"))?)
+            .map_err(|error| ThemeError::InvalidStoredTheme(format!("theme.css: {error}")))?;
+        Ok(package_defaults(&theme, &css))
     }
 
     pub fn save_customization(

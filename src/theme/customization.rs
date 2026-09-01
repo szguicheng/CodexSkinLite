@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::package::ThemeError;
-use super::safe_css::compile_safe_css;
+use super::safe_css::{compile_safe_css, parse_safe_css};
 
 pub const CUSTOMIZATION_SCHEMA_VERSION: u8 = 1;
 
@@ -72,11 +73,11 @@ pub struct ThemeCustomization {
     pub composer: ComposerCustomization,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct BackgroundCustomization {
-    pub position_x: u8,
-    pub position_y: u8,
+    pub position_x: Option<u8>,
+    pub position_y: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -105,15 +106,6 @@ pub struct ComposerCustomization {
     pub horizontal_inset_px: u16,
 }
 
-impl Default for BackgroundCustomization {
-    fn default() -> Self {
-        Self {
-            position_x: 50,
-            position_y: 50,
-        }
-    }
-}
-
 impl Default for ThemeCustomization {
     fn default() -> Self {
         Self {
@@ -134,8 +126,8 @@ impl ThemeCustomization {
                 self.schema_version
             )));
         }
-        self.background.position_x = self.background.position_x.min(100);
-        self.background.position_y = self.background.position_y.min(100);
+        self.background.position_x = self.background.position_x.map(|value| value.min(100));
+        self.background.position_y = self.background.position_y.map(|value| value.min(100));
         self.colors.background = normalize_color("background", self.colors.background)?;
         self.colors.panel = normalize_color("panel", self.colors.panel)?;
         self.colors.accent = normalize_color("accent", self.colors.accent)?;
@@ -157,6 +149,118 @@ impl ThemeCustomization {
             && self.surfaces.values().all(SurfaceCustomization::is_default)
             && self.composer == ComposerCustomization::default()
     }
+}
+
+impl ThemeCustomization {
+    pub(crate) fn with_saved_overrides(mut self, overrides: &Self) -> Self {
+        if overrides.background.position_x.is_some() {
+            self.background.position_x = overrides.background.position_x;
+        }
+        if overrides.background.position_y.is_some() {
+            self.background.position_y = overrides.background.position_y;
+        }
+        self.colors.background = overrides
+            .colors
+            .background
+            .clone()
+            .or(self.colors.background);
+        self.colors.panel = overrides.colors.panel.clone().or(self.colors.panel);
+        self.colors.accent = overrides.colors.accent.clone().or(self.colors.accent);
+        self.colors.text = overrides.colors.text.clone().or(self.colors.text);
+        self.colors.line = overrides.colors.line.clone().or(self.colors.line);
+        for (part, saved) in &overrides.surfaces {
+            let current = self.surfaces.entry(*part).or_default();
+            current.opacity = saved.opacity.or(current.opacity);
+            current.blur_px = saved.blur_px.or(current.blur_px);
+            current.radius_px = saved.radius_px.or(current.radius_px);
+            current.shadow = saved.shadow.or(current.shadow);
+        }
+        if overrides.composer.bottom_inset_px != 0 {
+            self.composer.bottom_inset_px = overrides.composer.bottom_inset_px;
+        }
+        if overrides.composer.horizontal_inset_px != 0 {
+            self.composer.horizontal_inset_px = overrides.composer.horizontal_inset_px;
+        }
+        self
+    }
+}
+
+pub(crate) fn package_defaults(theme: &Value, css: &str) -> ThemeCustomization {
+    let mut customization = ThemeCustomization::default();
+    customization.background.position_x = theme
+        .get("art")
+        .and_then(|art| art.get("focusX"))
+        .and_then(focus_percent);
+    customization.background.position_y = theme
+        .get("art")
+        .and_then(|art| art.get("focusY"))
+        .and_then(focus_percent);
+    customization.colors.background = theme_color(theme, "background");
+    customization.colors.panel = theme_color(theme, "panel");
+    customization.colors.accent = theme_color(theme, "accent");
+    customization.colors.text = theme_color(theme, "text");
+    customization.colors.line = theme_color(theme, "line");
+
+    if let Ok(rules) = parse_safe_css(css) {
+        for rule in rules {
+            let Some(part) = SurfacePart::ALL.into_iter().find(|part| {
+                rule.part == part.css_name()
+                    && rule.selector == format!("[data-ds-part=\"{}\"]", part.css_name())
+            }) else {
+                continue;
+            };
+            let surface = customization.surfaces.entry(part).or_default();
+            for (property, value) in rule.declarations {
+                match property {
+                    "opacity" => surface.opacity = parse_opacity(value),
+                    "backdrop-filter" => surface.blur_px = parse_blur(value),
+                    "border-radius" => surface.radius_px = parse_px(value, 28),
+                    "box-shadow" if value.eq_ignore_ascii_case("none") => {
+                        surface.shadow = Some(ShadowPreset::None)
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    customization
+}
+
+fn theme_color(theme: &Value, name: &str) -> Option<String> {
+    let value = theme.get("colors")?.get(name)?.as_str()?.to_string();
+    normalize_color(name, Some(value)).ok().flatten()
+}
+
+fn focus_percent(value: &Value) -> Option<u8> {
+    let value = value.as_f64()?;
+    value
+        .is_finite()
+        .then(|| (value.clamp(0.0, 1.0) * 100.0).round() as u8)
+}
+
+fn parse_opacity(value: &str) -> Option<u8> {
+    let value = value.parse::<f64>().ok()?;
+    (value.is_finite() && (0.65..=1.0).contains(&value)).then(|| (value * 100.0).round() as u8)
+}
+
+fn parse_blur(value: &str) -> Option<u8> {
+    value.split_whitespace().find_map(|token| {
+        token
+            .strip_prefix("blur(")
+            .and_then(|value| value.strip_suffix(')'))
+            .and_then(|value| parse_px(value, 30))
+    })
+}
+
+fn parse_px(value: &str, maximum: u8) -> Option<u8> {
+    let value = value.trim();
+    let number = if value == "0" {
+        0.0
+    } else {
+        value.strip_suffix("px")?.parse::<f64>().ok()?
+    };
+    (number.is_finite() && (0.0..=f64::from(maximum)).contains(&number))
+        .then(|| number.round() as u8)
 }
 
 impl SurfaceCustomization {

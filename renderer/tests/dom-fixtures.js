@@ -201,6 +201,7 @@ export function evaPayload(revision = 1) {
       id: "eva-warm-cream",
       signature: `eva-${revision}`,
       theme: {
+        art: { focusX: 0.44, focusY: 0.38 },
         colors: {
           background: "#fffaf0",
           panel: "#fff8e8",

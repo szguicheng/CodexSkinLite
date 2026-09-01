@@ -152,6 +152,16 @@ describe("new conversation composer", () => {
 });
 
 describe("Skin API", () => {
+  it("uses package artwork focus when no custom position is set", async () => {
+    const window = installRuntime({ fixture: "modernThread" });
+
+    await window.__CODEX_SKIN_LITE__.apply(evaPayload());
+
+    expect(window.document.querySelector("#codex-skin-lite-theme").textContent).toContain(
+      "background-position: 44% 38%",
+    );
+  });
+
   it("maps the complete main viewport and both side panels", async () => {
     const window = installRuntime({ fixture: "modernThreadWithRightPanel" });
 

@@ -43,10 +43,12 @@ pub(super) fn show(
     let Some(snapshot) = state.snapshot() else {
         return;
     };
-    let Some(theme_id) = snapshot.settings.active_theme_id.as_deref() else {
-        return;
+    let theme_id = snapshot.settings.active_theme_id.as_deref();
+    let draft = if theme_id.is_some() {
+        snapshot.active_theme_customization.clone()
+    } else {
+        ThemeCustomization::default()
     };
-    let draft = snapshot.active_theme_customization.clone();
     state.set_customization_draft(draft.clone());
     state.set_customization_surface(SurfacePart::Main);
 
@@ -60,7 +62,10 @@ pub(super) fn show(
             false,
         )
     };
-    window.setTitle(&NSString::from_str(&format!("自定义主题：{theme_id}")));
+    window.setTitle(&NSString::from_str(&format!(
+        "自定义主题：{}",
+        theme_id.unwrap_or("无")
+    )));
     unsafe { window.setReleasedWhenClosed(false) };
     window.setMinSize(NSSize::new(560.0, 520.0));
     window.center();
@@ -102,7 +107,7 @@ pub(super) fn show(
         &document,
         "水平",
         TAG_BACKGROUND_X,
-        &draft.background.position_x.to_string(),
+        &format_optional_u8(draft.background.position_x),
         24.0,
         818.0,
         mtm,
@@ -111,7 +116,7 @@ pub(super) fn show(
         &document,
         "垂直",
         TAG_BACKGROUND_Y,
-        &draft.background.position_y.to_string(),
+        &format_optional_u8(draft.background.position_y),
         220.0,
         818.0,
         mtm,
@@ -253,7 +258,20 @@ pub(super) fn show(
         mtm,
     );
 
-    add_label(&document, "未预览", 24.0, 330.0, 560.0, 24.0, mtm).setTag(TAG_STATUS);
+    add_label(
+        &document,
+        if theme_id.is_some() {
+            "未预览"
+        } else {
+            "当前未选择主题：此处显示空白草稿"
+        },
+        24.0,
+        330.0,
+        560.0,
+        24.0,
+        mtm,
+    )
+    .setTag(TAG_STATUS);
     add_button(
         &document,
         "预览",
@@ -310,9 +328,11 @@ pub(super) fn collect_draft(
         .contentView()
         .ok_or_else(|| "自定义窗口内容不可用".to_string())?;
     draft.background.position_x =
-        read_bounded_u16(&content, TAG_BACKGROUND_X, "背景水平", 100)? as u8;
+        read_optional_bounded_u16(&content, TAG_BACKGROUND_X, "背景水平", 100)?
+            .map(|value| value as u8);
     draft.background.position_y =
-        read_bounded_u16(&content, TAG_BACKGROUND_Y, "背景垂直", 100)? as u8;
+        read_optional_bounded_u16(&content, TAG_BACKGROUND_Y, "背景垂直", 100)?
+            .map(|value| value as u8);
     draft.colors.background = read_optional_color(&content, TAG_COLOR_BACKGROUND, "背景色")?;
     draft.colors.panel = read_optional_color(&content, TAG_COLOR_PANEL, "面板色")?;
     draft.colors.accent = read_optional_color(&content, TAG_COLOR_ACCENT, "强调色")?;
@@ -384,12 +404,12 @@ fn populate_controls(content: &NSView, draft: &ThemeCustomization, surface: Surf
     set_text_field(
         content,
         TAG_BACKGROUND_X,
-        &draft.background.position_x.to_string(),
+        &format_optional_u8(draft.background.position_x),
     );
     set_text_field(
         content,
         TAG_BACKGROUND_Y,
-        &draft.background.position_y.to_string(),
+        &format_optional_u8(draft.background.position_y),
     );
     set_text_field(
         content,
@@ -472,6 +492,10 @@ fn populate_surface_controls(content: &NSView, draft: &ThemeCustomization, surfa
     if let Some(popup) = popup(content, TAG_SURFACE_SHADOW) {
         popup.selectItemAtIndex(shadow_index);
     }
+}
+
+fn format_optional_u8(value: Option<u8>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
 }
 
 fn read_optional_color(content: &NSView, tag: isize, name: &str) -> Result<Option<String>, String> {

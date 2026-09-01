@@ -9,8 +9,8 @@ use codex_skin_lite::theme::{
 fn default_customization_has_safe_baseline_values() {
     let value = ThemeCustomization::default();
 
-    assert_eq!(value.background.position_x, 50);
-    assert_eq!(value.background.position_y, 50);
+    assert_eq!(value.background.position_x, None);
+    assert_eq!(value.background.position_y, None);
     assert_eq!(value.composer, ComposerCustomization::default());
     assert_eq!(value.colors, PaletteCustomization::default());
     assert!(value.surfaces.is_empty());
@@ -65,8 +65,8 @@ fn generated_css_uses_only_registered_surface_parts() {
 fn normalization_clamps_layout_values_and_trims_optional_colors() {
     let value = ThemeCustomization {
         background: BackgroundCustomization {
-            position_x: 255,
-            position_y: 255,
+            position_x: Some(255),
+            position_y: Some(255),
         },
         colors: PaletteCustomization {
             accent: Some("  #ABCDEF  ".into()),
@@ -81,8 +81,8 @@ fn normalization_clamps_layout_values_and_trims_optional_colors() {
     .normalized()
     .unwrap();
 
-    assert_eq!(value.background.position_x, 100);
-    assert_eq!(value.background.position_y, 100);
+    assert_eq!(value.background.position_x, Some(100));
+    assert_eq!(value.background.position_y, Some(100));
     assert_eq!(value.colors.accent.as_deref(), Some("#abcdef"));
     assert_eq!(value.composer.bottom_inset_px, 80);
     assert_eq!(value.composer.horizontal_inset_px, 120);

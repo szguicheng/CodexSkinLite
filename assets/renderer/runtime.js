@@ -286,8 +286,15 @@
       }
     }
     const background = theme.customization?.background || {};
-    const positionX = boundedNumber(background.positionX, 0, 100, 50);
-    const positionY = boundedNumber(background.positionY, 0, 100, 50);
+    const art = theme.theme?.art || {};
+    const packagePositionX = boundedNumber(Number(art.focusX) * 100, 0, 100, 50);
+    const packagePositionY = boundedNumber(Number(art.focusY) * 100, 0, 100, 50);
+    const positionX = background.positionX == null
+      ? packagePositionX
+      : boundedNumber(background.positionX, 0, 100, packagePositionX);
+    const positionY = background.positionY == null
+      ? packagePositionY
+      : boundedNumber(background.positionY, 0, 100, packagePositionY);
     setThemeVariable(
       "--ds-theme-background-image",
       `url("${state.blobUrl}")`,

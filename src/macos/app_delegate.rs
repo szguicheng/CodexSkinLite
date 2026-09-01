@@ -175,10 +175,16 @@ define_class!(
                     window.close();
                 }
                 self.ivars().state.clear_customization_draft();
+                let selected = title.to_string();
+                let title = if selected == "无" {
+                    String::new()
+                } else {
+                    selected
+                };
                 let _ = self
                     .ivars()
                     .controller
-                    .send(AppCommand::ActivateTheme(title.to_string()));
+                    .send(AppCommand::ActivateTheme(title));
             }
         }
 

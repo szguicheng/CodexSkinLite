@@ -84,13 +84,13 @@ fn compile_safe_css_inner(css: &str) -> anyhow::Result<String> {
 }
 
 #[derive(Debug)]
-struct SafeCssRule<'a> {
-    selector: &'a str,
-    part: &'a str,
-    declarations: Vec<(&'a str, &'a str)>,
+pub(crate) struct SafeCssRule<'a> {
+    pub(crate) selector: &'a str,
+    pub(crate) part: &'a str,
+    pub(crate) declarations: Vec<(&'a str, &'a str)>,
 }
 
-fn parse_safe_css(css: &str) -> anyhow::Result<Vec<SafeCssRule<'_>>> {
+pub(crate) fn parse_safe_css(css: &str) -> anyhow::Result<Vec<SafeCssRule<'_>>> {
     if css.is_empty() || css.len() > CSS_LIMIT {
         bail!("theme.css 为空或超过 256 KiB 限制");
     }

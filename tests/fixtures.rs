@@ -65,14 +65,18 @@ pub fn valid_theme_zip() -> Vec<u8> {
 }
 
 pub fn theme_zip(options: ThemeZipOptions) -> Vec<u8> {
-    let css = br#"[data-ds-part="main"] { background-color: #111111; }"#.to_vec();
+    let css = br#"
+        [data-ds-part="main"] { background-color: #111111; }
+        [data-ds-part="composer"] { border-radius: 18px; backdrop-filter: blur(12px); opacity: 0.80; }
+    "#
+    .to_vec();
     let theme = serde_json::to_vec(&json!({
         "schemaVersion": 1,
         "id": options.theme_id,
         "name": options.theme_id,
         "image": options.image_name,
         "appearance": "light",
-        "art": { "focusX": 0.5, "focusY": 0.5, "safeArea": "none", "taskMode": "ambient" },
+        "art": { "focusX": 0.44, "focusY": 0.38, "safeArea": "none", "taskMode": "ambient" },
         "colors": {
             "background": "#fffaf0", "panel": "#fff8e8", "panelAlt": "#fff5df",
             "accent": "#e98f68", "accentAlt": "#f0a681", "secondary": "#c79579",

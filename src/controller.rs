@@ -60,14 +60,7 @@ impl Controller {
         runtime: Arc<dyn RendererRuntime>,
         sink: Arc<dyn UiSink>,
     ) -> anyhow::Result<Self> {
-        let mut settings = settings_store.load()?;
-        if settings.active_theme_id.is_none() {
-            let themes = theme_store.list()?;
-            if themes.len() == 1 {
-                settings.active_theme_id = Some(themes[0].id.clone());
-                settings_store.save(&settings)?;
-            }
-        }
+        let settings = settings_store.load()?;
         let controller = Self {
             settings_store,
             theme_store,
@@ -126,6 +119,19 @@ impl Controller {
                     self.settings_store.save(&self.settings)?;
                 }
                 self.publish();
+            }
+            AppCommand::ActivateTheme(id) if id.is_empty() => {
+                self.preview_customization = None;
+                let mut next = self.settings.clone();
+                next.active_theme_id = None;
+                next.theme_enabled = false;
+                if matches!(self.connection, ConnectionState::Connected) {
+                    self.apply_candidate(next).await?;
+                } else {
+                    self.settings_store.save(&next)?;
+                    self.settings = next;
+                    self.publish();
+                }
             }
             AppCommand::ActivateTheme(id) => {
                 self.theme_store.load_payload(&id)?;
@@ -249,7 +255,6 @@ impl Controller {
             .ok_or_else(|| anyhow::anyhow!("select a theme before saving customization"))?
             .to_string();
         let customization = customization.normalized()?;
-        let previous = self.theme_store.load_customization(&id)?;
         let apply_now =
             self.settings.theme_enabled && matches!(self.connection, ConnectionState::Connected);
         if apply_now {
@@ -267,9 +272,7 @@ impl Controller {
         if let Err(error) = self.theme_store.save_customization(&id, &customization) {
             if apply_now {
                 self.revision += 1;
-                if let Ok(payload) =
-                    self.payload_with_customization(&self.settings, self.revision, Some(&previous))
-                {
+                if let Ok(payload) = self.payload(&self.settings, self.revision) {
                     let _ = self.apply_renderer_payload(&payload).await;
                 }
             }
@@ -342,7 +345,7 @@ impl Controller {
             .settings
             .active_theme_id
             .as_deref()
-            .and_then(|id| self.theme_store.load_customization(id).ok())
+            .and_then(|id| self.theme_store.load_editor_customization(id).ok())
             .unwrap_or_default();
         self.sink.publish(AppSnapshot {
             settings: self.settings.clone(),
