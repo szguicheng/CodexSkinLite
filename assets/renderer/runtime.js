@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 6;
+  const API_VERSION = 7;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -254,6 +254,13 @@
     return Uint8Array.from(binary, (character) => character.charCodeAt(0));
   };
 
+  const boundedNumber = (value, minimum, maximum, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? Math.max(minimum, Math.min(maximum, number))
+      : fallback;
+  };
+
   const applyTheme = (theme) => {
     if (!theme) {
       clearTheme();
@@ -271,6 +278,16 @@
       const name = key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
       setThemeVariable(`--ds-theme-color-${name}`, value);
     }
+    const customColors = theme.customization?.colors || {};
+    for (const key of ["background", "panel", "accent", "text", "line"]) {
+      const value = customColors[key];
+      if (typeof value === "string" && value) {
+        setThemeVariable(`--ds-theme-color-${key}`, value);
+      }
+    }
+    const background = theme.customization?.background || {};
+    const positionX = boundedNumber(background.positionX, 0, 100, 50);
+    const positionY = boundedNumber(background.positionY, 0, 100, 50);
     setThemeVariable(
       "--ds-theme-background-image",
       `url("${state.blobUrl}")`,
@@ -283,7 +300,8 @@
     }
     style.textContent = `
       html, body { background-image: var(--ds-theme-background-image) !important;
-        background-position: center !important; background-size: cover !important; }
+        background-position: ${positionX}% ${positionY}% !important;
+        background-size: cover !important; }
       [data-csl-header-title-surface="true"] {
         background-color: transparent !important;
       }
@@ -363,7 +381,7 @@
     state.composerPosition = { node: null, styles: null, hadStyle: false };
   };
 
-  const syncComposerPosition = (layout, enabled) => {
+  const syncComposerPosition = (layout, enabled, customization) => {
     const footer = layout.footer;
     if (!enabled || !footer || !layout.scroll) {
       restoreComposerPosition();
@@ -387,12 +405,15 @@
         ),
       };
     }
+    const composer = customization?.composer || {};
+    const bottomInset = boundedNumber(composer.bottomInsetPx, 0, 80, 0);
+    const horizontalInset = boundedNumber(composer.horizontalInsetPx, 0, 120, 0);
     for (const [property, value] of Object.entries({
       position: "fixed",
       top: "auto",
-      right: "0px",
-      bottom: "0px",
-      left: "0px",
+      right: `${horizontalInset}px`,
+      bottom: `${bottomInset}px`,
+      left: `${horizontalInset}px`,
       width: "auto",
       "z-index": "10",
     })) {
@@ -560,6 +581,7 @@
     syncComposerPosition(
       layout,
       Boolean((payload.themeEnabled && payload.theme) || payload.conversationCentered),
+      payload.themeEnabled ? payload.theme?.customization : null,
     );
     if (payload.themeEnabled && payload.theme) {
       state.metrics.fullScans += 1;

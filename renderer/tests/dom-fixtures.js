@@ -213,6 +213,26 @@ export function blueEyesPayload(revision = 2) {
   return payload;
 }
 
+export function customizedEvaPayload(revision = 1) {
+  const payload = evaPayload(revision);
+  payload.theme.customization = {
+    schemaVersion: 1,
+    background: { positionX: 18, positionY: 72 },
+    colors: {
+      background: null,
+      panel: null,
+      accent: "#00aacc",
+      text: null,
+      line: null,
+    },
+    surfaces: {
+      composer: { opacity: 88, blurPx: 12, radiusPx: 20, shadow: "soft" },
+    },
+    composer: { bottomInsetPx: 14, horizontalInsetPx: 22 },
+  };
+  return payload;
+}
+
 export function layoutPayload(enabled, width = 900, revision = 1) {
   return {
     revision,

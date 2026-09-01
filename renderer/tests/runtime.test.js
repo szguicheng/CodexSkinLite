@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   blueEyesPayload,
+  customizedEvaPayload,
   evaPayload,
   installRuntime,
   layoutPayload,
@@ -199,6 +200,26 @@ describe("Skin API", () => {
 });
 
 describe("composer regressions", () => {
+  it("applies and restores bounded customization values", async () => {
+    const window = installRuntime({ fixture: "modernScrollingComposerWithRightPanel" });
+    const footer = window.document.querySelector("[data-thread-scroll-footer]");
+    const originalParent = footer.parentElement;
+
+    await window.__CODEX_SKIN_LITE__.apply(customizedEvaPayload(1));
+
+    expect(window.document.documentElement.style.getPropertyValue("--ds-theme-color-accent")).toBe("#00aacc");
+    expect(window.document.querySelector("#codex-skin-lite-theme").textContent).toContain("background-position: 18% 72%");
+    expect(footer.parentElement).toBe(originalParent);
+    expect(footer.style.bottom).toBe("14px");
+    expect(footer.style.left).toBe("22px");
+    expect(footer.style.right).toBe("22px");
+
+    await window.__CODEX_SKIN_LITE__.apply(evaPayload(2));
+    expect(footer.style.bottom).toBe("0px");
+    expect(footer.style.left).toBe("0px");
+    expect(footer.style.right).toBe("0px");
+  });
+
   it("fixes a themed footer to the stable thread viewport without moving it", () => {
     const window = installRuntime({ fixture: "modernScrollingComposerWithRightPanel" });
     const scroll = window.document.querySelector(".thread-scroll-container");
