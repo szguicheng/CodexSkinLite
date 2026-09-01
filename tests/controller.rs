@@ -103,6 +103,76 @@ async fn every_successful_connection_path_applies_saved_settings() {
 }
 
 #[tokio::test]
+async fn preview_customization_applies_without_writing_the_file() {
+    let mut env = controller_environment(false);
+    let candidate = codex_skin_lite::theme::ThemeCustomization {
+        background: codex_skin_lite::theme::BackgroundCustomization {
+            position_x: 12,
+            position_y: 84,
+        },
+        ..Default::default()
+    };
+
+    env.controller.handle(AppCommand::OpenCodex).await.unwrap();
+    env.controller
+        .handle(AppCommand::PreviewThemeCustomization(candidate.clone()))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        env.themes.load_customization("eva-warm-cream").unwrap(),
+        codex_skin_lite::theme::ThemeCustomization::default()
+    );
+    assert_eq!(
+        env.applied_payloads
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .theme
+            .as_ref()
+            .unwrap()
+            .customization,
+        candidate
+    );
+}
+
+#[tokio::test]
+async fn save_customization_persists_and_is_sent_on_the_next_connection() {
+    let mut env = controller_environment(false);
+    let candidate = codex_skin_lite::theme::ThemeCustomization {
+        composer: codex_skin_lite::theme::ComposerCustomization {
+            bottom_inset_px: 16,
+            horizontal_inset_px: 24,
+        },
+        ..Default::default()
+    };
+
+    env.controller
+        .handle(AppCommand::SaveThemeCustomization(candidate.clone()))
+        .await
+        .unwrap();
+    assert_eq!(
+        env.themes.load_customization("eva-warm-cream").unwrap(),
+        candidate
+    );
+
+    env.controller.handle(AppCommand::Reconnect).await.unwrap();
+    assert_eq!(
+        env.applied_payloads
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .theme
+            .as_ref()
+            .unwrap()
+            .customization,
+        candidate
+    );
+}
+
+#[tokio::test]
 async fn first_import_selects_theme_without_enabling_it() {
     let dir = tempfile::tempdir().unwrap();
     let paths = AppPaths::for_test(dir.path());
@@ -154,6 +224,7 @@ fn startup_selects_the_only_imported_theme_when_settings_are_empty() {
 struct ControllerEnvironment {
     _dir: tempfile::TempDir,
     settings: SettingsStore,
+    themes: ThemeStore,
     controller: Controller,
     sink: Arc<RecordingSink>,
     applied_payloads: Arc<Mutex<Vec<RendererPayload>>>,
@@ -191,10 +262,12 @@ fn controller_environment(fail_apply: bool) -> ControllerEnvironment {
         renderer_revision: renderer_revision.clone(),
     });
     let sink = Arc::new(RecordingSink::default());
-    let controller = Controller::new(settings.clone(), themes, runtime, sink.clone()).unwrap();
+    let controller =
+        Controller::new(settings.clone(), themes.clone(), runtime, sink.clone()).unwrap();
     ControllerEnvironment {
         _dir: dir,
         settings,
+        themes,
         controller,
         sink,
         applied_payloads,

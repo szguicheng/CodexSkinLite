@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use codex_skin_lite::controller::UiSink;
 use codex_skin_lite::macos::{AppKitSink, AppKitState, MenuAction};
 use codex_skin_lite::model::{AppSettings, AppSnapshot, ConnectionState};
+use codex_skin_lite::theme::ThemeCustomization;
 
 #[test]
 fn menu_model_exposes_only_approved_actions() {
@@ -34,6 +35,7 @@ fn publishing_snapshot_notifies_registered_ui_refresher() {
         settings: AppSettings::default(),
         connection: ConnectionState::Connected,
         active_theme_name: None,
+        active_theme_customization: ThemeCustomization::default(),
         themes: Vec::new(),
     });
 

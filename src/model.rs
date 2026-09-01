@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::theme::ThemeCustomization;
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
@@ -43,6 +45,7 @@ pub struct AppSnapshot {
     pub settings: AppSettings,
     pub connection: ConnectionState,
     pub active_theme_name: Option<String>,
+    pub active_theme_customization: ThemeCustomization,
     pub themes: Vec<ThemeChoice>,
 }
 

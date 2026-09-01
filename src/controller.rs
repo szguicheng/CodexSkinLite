@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::model::{AppSettings, AppSnapshot, ConnectionState, ThemeChoice};
 use crate::renderer::RendererPayload;
 use crate::settings::SettingsStore;
-use crate::theme::{ThemeStore, ThemeSummary};
+use crate::theme::{ThemeCustomization, ThemeStore, ThemeSummary};
 
 pub type RuntimeFuture<'a, T> = Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send + 'a>>;
 
@@ -37,6 +37,8 @@ pub enum AppCommand {
     SetConversationCentered(bool),
     SetConversationWidth(u16),
     SetCodexPath(PathBuf),
+    PreviewThemeCustomization(ThemeCustomization),
+    SaveThemeCustomization(ThemeCustomization),
     Shutdown,
 }
 
@@ -48,6 +50,7 @@ pub struct Controller {
     settings: AppSettings,
     connection: ConnectionState,
     revision: u64,
+    preview_customization: Option<ThemeCustomization>,
 }
 
 impl Controller {
@@ -73,6 +76,7 @@ impl Controller {
             settings,
             connection: ConnectionState::Disconnected,
             revision: 0,
+            preview_customization: None,
         };
         controller.publish();
         Ok(controller)
@@ -91,6 +95,7 @@ impl Controller {
     async fn handle_inner(&mut self, command: AppCommand) -> anyhow::Result<()> {
         match command {
             AppCommand::OpenCodex => {
+                self.preview_customization = None;
                 self.connection = self.runtime.open(&self.settings).await?;
                 if matches!(self.connection, ConnectionState::Connected) {
                     self.apply_saved_settings().await?;
@@ -98,6 +103,7 @@ impl Controller {
                 self.publish();
             }
             AppCommand::ConfirmRestart => {
+                self.preview_customization = None;
                 self.connection = self.runtime.confirmed_restart(&self.settings).await?;
                 if matches!(self.connection, ConnectionState::Connected) {
                     self.apply_saved_settings().await?;
@@ -105,6 +111,7 @@ impl Controller {
                 self.publish();
             }
             AppCommand::Reconnect => {
+                self.preview_customization = None;
                 self.connection = self.runtime.reconnect(&self.settings).await?;
                 if matches!(self.connection, ConnectionState::Connected) {
                     self.apply_saved_settings().await?;
@@ -122,6 +129,7 @@ impl Controller {
             }
             AppCommand::ActivateTheme(id) => {
                 self.theme_store.load_payload(&id)?;
+                self.preview_customization = None;
                 let mut next = self.settings.clone();
                 next.active_theme_id = Some(id);
                 next.theme_enabled = true;
@@ -131,6 +139,7 @@ impl Controller {
                 if enabled && self.settings.active_theme_id.is_none() {
                     anyhow::bail!("select a theme before enabling presentation");
                 }
+                self.preview_customization = None;
                 let mut next = self.settings.clone();
                 next.theme_enabled = enabled;
                 self.apply_candidate(next).await?;
@@ -141,11 +150,13 @@ impl Controller {
                 self.publish();
             }
             AppCommand::SetConversationCentered(enabled) => {
+                self.preview_customization = None;
                 let mut next = self.settings.clone();
                 next.conversation_centered = enabled;
                 self.apply_candidate(next).await?;
             }
             AppCommand::SetConversationWidth(width) => {
+                self.preview_customization = None;
                 let mut next = self.settings.clone();
                 next.conversation_max_width = width.clamp(320, 4000);
                 self.apply_candidate(next).await?;
@@ -155,18 +166,38 @@ impl Controller {
                 self.settings_store.save(&self.settings)?;
                 self.publish();
             }
+            AppCommand::PreviewThemeCustomization(customization) => {
+                self.preview_theme_customization(customization).await?;
+            }
+            AppCommand::SaveThemeCustomization(customization) => {
+                self.save_theme_customization(customization).await?;
+            }
             AppCommand::Shutdown => {}
         }
         Ok(())
     }
 
     fn payload(&self, settings: &AppSettings, revision: u64) -> anyhow::Result<RendererPayload> {
+        self.payload_with_customization(settings, revision, None)
+    }
+
+    fn payload_with_customization(
+        &self,
+        settings: &AppSettings,
+        revision: u64,
+        customization: Option<&ThemeCustomization>,
+    ) -> anyhow::Result<RendererPayload> {
         let theme = if settings.theme_enabled {
             let id = settings
                 .active_theme_id
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("enabled theme has no selected ID"))?;
-            Some(self.theme_store.load_payload(id)?)
+            Some(match customization {
+                Some(customization) => self
+                    .theme_store
+                    .load_payload_with_customization(id, customization)?,
+                None => self.theme_store.load_payload(id)?,
+            })
         } else {
             None
         };
@@ -177,6 +208,94 @@ impl Controller {
             conversation_centered: settings.conversation_centered,
             conversation_max_width: settings.conversation_max_width,
         })
+    }
+
+    async fn preview_theme_customization(
+        &mut self,
+        customization: ThemeCustomization,
+    ) -> anyhow::Result<()> {
+        if !matches!(self.connection, ConnectionState::Connected) {
+            anyhow::bail!("Codex is not connected; preview requires an active connection");
+        }
+        if self.settings.active_theme_id.is_none() {
+            anyhow::bail!("select a theme before previewing customization");
+        }
+        let customization = customization.normalized()?;
+        let mut preview_settings = self.settings.clone();
+        preview_settings.theme_enabled = true;
+        self.revision += 1;
+        let payload = self.payload_with_customization(
+            &preview_settings,
+            self.revision,
+            Some(&customization),
+        )?;
+        if let Err(error) = self.apply_renderer_payload(&payload).await {
+            self.restore_saved_payload().await;
+            return Err(error);
+        }
+        self.preview_customization = Some(customization);
+        self.publish();
+        Ok(())
+    }
+
+    async fn save_theme_customization(
+        &mut self,
+        customization: ThemeCustomization,
+    ) -> anyhow::Result<()> {
+        let id = self
+            .settings
+            .active_theme_id
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("select a theme before saving customization"))?
+            .to_string();
+        let customization = customization.normalized()?;
+        let previous = self.theme_store.load_customization(&id)?;
+        let apply_now =
+            self.settings.theme_enabled && matches!(self.connection, ConnectionState::Connected);
+        if apply_now {
+            self.revision += 1;
+            let payload = self.payload_with_customization(
+                &self.settings,
+                self.revision,
+                Some(&customization),
+            )?;
+            if let Err(error) = self.apply_renderer_payload(&payload).await {
+                self.restore_saved_payload().await;
+                return Err(error);
+            }
+        }
+        if let Err(error) = self.theme_store.save_customization(&id, &customization) {
+            if apply_now {
+                self.revision += 1;
+                if let Ok(payload) =
+                    self.payload_with_customization(&self.settings, self.revision, Some(&previous))
+                {
+                    let _ = self.apply_renderer_payload(&payload).await;
+                }
+            }
+            return Err(error.into());
+        }
+        self.preview_customization = None;
+        self.publish();
+        Ok(())
+    }
+
+    async fn apply_renderer_payload(&self, payload: &RendererPayload) -> anyhow::Result<()> {
+        let acknowledged_revision = self.runtime.apply(payload).await?;
+        if acknowledged_revision != payload.revision {
+            anyhow::bail!(
+                "renderer acknowledged stale revision {acknowledged_revision}; expected {}",
+                payload.revision
+            );
+        }
+        Ok(())
+    }
+
+    async fn restore_saved_payload(&mut self) {
+        self.revision += 1;
+        if let Ok(previous) = self.payload(&self.settings, self.revision) {
+            let _ = self.apply_renderer_payload(&previous).await;
+        }
     }
 
     async fn apply_saved_settings(&mut self) -> anyhow::Result<()> {
@@ -202,19 +321,8 @@ impl Controller {
     async fn apply_candidate(&mut self, candidate: AppSettings) -> anyhow::Result<()> {
         self.revision += 1;
         let candidate_payload = self.payload(&candidate, self.revision)?;
-        let result = self.runtime.apply(&candidate_payload).await;
-        if !matches!(result, Ok(revision) if revision == self.revision) {
-            let error = match result {
-                Ok(revision) => anyhow::anyhow!(
-                    "renderer acknowledged stale revision {revision}; expected {}",
-                    self.revision
-                ),
-                Err(error) => error,
-            };
-            self.revision += 1;
-            if let Ok(previous) = self.payload(&self.settings, self.revision) {
-                let _ = self.runtime.apply(&previous).await;
-            }
+        if let Err(error) = self.apply_renderer_payload(&candidate_payload).await {
+            self.restore_saved_payload().await;
             return Err(error);
         }
         self.settings_store.save(&candidate)?;
@@ -230,10 +338,17 @@ impl Controller {
             .into_iter()
             .find(|theme| Some(theme.id.as_str()) == self.settings.active_theme_id.as_deref())
             .map(|theme| theme.name.clone());
+        let active_theme_customization = self
+            .settings
+            .active_theme_id
+            .as_deref()
+            .and_then(|id| self.theme_store.load_customization(id).ok())
+            .unwrap_or_default();
         self.sink.publish(AppSnapshot {
             settings: self.settings.clone(),
             connection: self.connection.clone(),
             active_theme_name,
+            active_theme_customization,
             themes: themes
                 .into_iter()
                 .map(|theme: ThemeSummary| ThemeChoice {
