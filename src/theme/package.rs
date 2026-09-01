@@ -98,6 +98,8 @@ pub enum ThemeError {
     ActiveTheme,
     #[error("stored theme is incomplete: {0}")]
     InvalidStoredTheme(String),
+    #[error("invalid customization: {0}")]
+    InvalidCustomization(String),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

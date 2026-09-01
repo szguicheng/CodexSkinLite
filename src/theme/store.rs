@@ -9,7 +9,9 @@ use sha2::{Digest, Sha256};
 
 use crate::paths::AppPaths;
 
-use super::{ThemeError, compile_safe_css, validate_package};
+use super::{
+    ThemeCustomization, ThemeError, compile_customization_css, compile_safe_css, validate_package,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ThemeSummary {
@@ -25,6 +27,7 @@ pub struct ThemePayload {
     pub signature: String,
     pub theme: serde_json::Value,
     pub compiled_css: String,
+    pub customization: ThemeCustomization,
     pub image_mime: String,
     pub image_base64: String,
 }
@@ -134,6 +137,79 @@ impl ThemeStore {
     }
 
     pub fn load_payload(&self, id: &str) -> Result<ThemePayload, ThemeError> {
+        let customization = self.load_customization(id)?;
+        self.load_payload_inner(id, &customization)
+    }
+
+    pub fn load_payload_with_customization(
+        &self,
+        id: &str,
+        customization: &ThemeCustomization,
+    ) -> Result<ThemePayload, ThemeError> {
+        let customization = customization.clone().normalized()?;
+        self.load_payload_inner(id, &customization)
+    }
+
+    pub fn load_customization(&self, id: &str) -> Result<ThemeCustomization, ThemeError> {
+        validate_stored_id(id)?;
+        let directory = self.paths.themes_dir().join(id);
+        ensure_real_directory(&directory)?;
+        let path = directory.join("customization.json");
+        let bytes = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(ThemeCustomization::default());
+            }
+            Err(error) => {
+                tracing::warn!(theme_id = id, %error, "unable to read theme customization");
+                return Ok(ThemeCustomization::default());
+            }
+        };
+        if bytes.len() > 32 * 1024 {
+            tracing::warn!(theme_id = id, "theme customization exceeds 32 KiB");
+            return Ok(ThemeCustomization::default());
+        }
+        match serde_json::from_slice::<ThemeCustomization>(&bytes)
+            .map_err(|error| ThemeError::InvalidCustomization(error.to_string()))
+            .and_then(ThemeCustomization::normalized)
+        {
+            Ok(customization) => Ok(customization),
+            Err(error) => {
+                tracing::warn!(theme_id = id, %error, "ignoring invalid theme customization");
+                Ok(ThemeCustomization::default())
+            }
+        }
+    }
+
+    pub fn save_customization(
+        &self,
+        id: &str,
+        customization: &ThemeCustomization,
+    ) -> Result<(), ThemeError> {
+        validate_stored_id(id)?;
+        let directory = self.paths.themes_dir().join(id);
+        ensure_real_directory(&directory)?;
+        let customization = customization.clone().normalized()?;
+        let path = directory.join("customization.json");
+        if customization.is_default() {
+            match fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(anyhow_error(error)),
+            }
+            return Ok(());
+        }
+        let bytes = serde_json::to_vec_pretty(&customization)
+            .map_err(|error| ThemeError::InvalidCustomization(error.to_string()))?;
+        write_sync(&directory.join("customization.json.tmp"), &bytes)?;
+        fs::rename(directory.join("customization.json.tmp"), path).map_err(anyhow_error)
+    }
+
+    fn load_payload_inner(
+        &self,
+        id: &str,
+        customization: &ThemeCustomization,
+    ) -> Result<ThemePayload, ThemeError> {
         validate_stored_id(id)?;
         let directory = self.paths.themes_dir().join(id);
         ensure_real_directory(&directory)?;
@@ -156,8 +232,13 @@ impl ThemeStore {
                 "theme.json id does not match directory".into(),
             ));
         }
-        let compiled_css = String::from_utf8(compiled_bytes.clone())
+        let mut compiled_css = String::from_utf8(compiled_bytes.clone())
             .map_err(|error| ThemeError::InvalidStoredTheme(format!("compiled.css: {error}")))?;
+        let customization_css = compile_customization_css(customization)?;
+        if !customization_css.is_empty() {
+            compiled_css.push('\n');
+            compiled_css.push_str(&customization_css);
+        }
         let (image_path, image_mime) = find_image(&directory)?;
         let image = read_required(&image_path)?;
         let mut hasher = Sha256::new();
@@ -170,6 +251,7 @@ impl ThemeStore {
             signature: format!("{:x}", hasher.finalize()),
             theme,
             compiled_css,
+            customization: customization.clone(),
             image_mime: image_mime.into(),
             image_base64: base64::engine::general_purpose::STANDARD.encode(image),
         })
