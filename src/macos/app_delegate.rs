@@ -6,18 +6,20 @@ use objc2::runtime::{AnyObject, NSObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSButton, NSControlStateValueOn, NSOpenPanel,
-    NSPopUpButton, NSStatusBar, NSStatusItem, NSTextField, NSVariableStatusItemLength,
+    NSPopUpButton, NSStatusBar, NSStatusItem, NSTextField, NSVariableStatusItemLength, NSWindow,
+    NSWorkspace,
 };
-use objc2_foundation::{NSObjectProtocol, NSString};
+use objc2_foundation::{NSObjectProtocol, NSString, NSURL};
 
 use crate::controller::{AppCommand, ControllerHandle};
 
-use super::{AppKitState, menu, settings_window};
+use super::{AppKitState, customization_window, menu, settings_window};
 
 struct ActionTargetIvars {
     controller: ControllerHandle,
     state: Arc<AppKitState>,
-    settings_window: RefCell<Option<Retained<objc2_app_kit::NSWindow>>>,
+    settings_window: RefCell<Option<Retained<NSWindow>>>,
+    customization_window: RefCell<Option<Retained<NSWindow>>>,
 }
 
 define_class!(
@@ -48,6 +50,109 @@ define_class!(
             settings_window::show(mtm, self, &self.ivars().state, &self.ivars().settings_window);
         }
 
+        #[unsafe(method(openThemeGallery:))]
+        fn open_theme_gallery(&self, _sender: Option<&AnyObject>) {
+            let Some(url) = NSURL::URLWithString(&NSString::from_str(
+                "https://dreamskin.cc/gallery",
+            )) else {
+                return;
+            };
+            let _ = NSWorkspace::sharedWorkspace().openURL(&url);
+        }
+
+        #[unsafe(method(customizeTheme:))]
+        fn customize_theme(&self, _sender: Option<&AnyObject>) {
+            let mtm = MainThreadMarker::from(self);
+            customization_window::show(
+                mtm,
+                self,
+                &self.ivars().state,
+                &self.ivars().customization_window,
+            );
+        }
+
+        #[unsafe(method(selectCustomizationComponent:))]
+        fn select_customization_component(&self, sender: &NSPopUpButton) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            match customization_window::select_surface(
+                window,
+                &self.ivars().state,
+                sender.indexOfSelectedItem(),
+            ) {
+                Ok(()) => {}
+                Err(error) => customization_window::set_status(window, &error),
+            }
+        }
+
+        #[unsafe(method(previewCustomization:))]
+        fn preview_customization(&self, _sender: Option<&AnyObject>) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            match customization_window::collect_draft(window, &self.ivars().state) {
+                Ok(draft) => {
+                    self.ivars().state.set_customization_draft(draft.clone());
+                    if self
+                        .ivars()
+                        .controller
+                        .send(AppCommand::PreviewThemeCustomization(draft))
+                        .is_ok()
+                    {
+                        customization_window::set_status(window, "预览已发送（未保存）");
+                    } else {
+                        customization_window::set_status(window, "预览请求发送失败");
+                    }
+                }
+                Err(error) => customization_window::set_status(window, &error),
+            }
+        }
+
+        #[unsafe(method(saveCustomization:))]
+        fn save_customization(&self, _sender: Option<&AnyObject>) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            match customization_window::collect_draft(window, &self.ivars().state) {
+                Ok(draft) => {
+                    self.ivars().state.set_customization_draft(draft.clone());
+                    if self
+                        .ivars()
+                        .controller
+                        .send(AppCommand::SaveThemeCustomization(draft))
+                        .is_ok()
+                    {
+                        customization_window::set_status(window, "保存已提交");
+                    } else {
+                        customization_window::set_status(window, "保存请求发送失败");
+                    }
+                }
+                Err(error) => customization_window::set_status(window, &error),
+            }
+        }
+
+        #[unsafe(method(resetCustomization:))]
+        fn reset_customization(&self, _sender: Option<&AnyObject>) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            customization_window::reset_draft(window, &self.ivars().state);
+            customization_window::set_status(window, "已恢复默认，请预览后保存");
+        }
+
+        #[unsafe(method(closeCustomization:))]
+        fn close_customization(&self, _sender: Option<&AnyObject>) {
+            if let Some(window) = self.ivars().customization_window.borrow_mut().take() {
+                window.close();
+            }
+            self.ivars().state.clear_customization_draft();
+        }
+
         #[unsafe(method(quit:))]
         fn quit(&self, _sender: Option<&AnyObject>) {
             let _ = self.ivars().controller.send(AppCommand::Shutdown);
@@ -66,6 +171,10 @@ define_class!(
         #[unsafe(method(selectTheme:))]
         fn select_theme(&self, sender: &NSPopUpButton) {
             if let Some(title) = sender.titleOfSelectedItem() {
+                if let Some(window) = self.ivars().customization_window.borrow_mut().take() {
+                    window.close();
+                }
+                self.ivars().state.clear_customization_draft();
                 let _ = self
                     .ivars()
                     .controller
@@ -138,6 +247,7 @@ impl ActionTarget {
             controller,
             state,
             settings_window: RefCell::new(None),
+            customization_window: RefCell::new(None),
         });
         unsafe { msg_send![super(this), init] }
     }
@@ -146,12 +256,7 @@ impl ActionTarget {
 pub(super) fn run(controller: ControllerHandle, state: Arc<AppKitState>) -> ! {
     let mtm = MainThreadMarker::new().expect("AppKit must run on the main thread");
     let app = NSApplication::sharedApplication(mtm);
-    let open_settings = std::env::var_os("CODEX_SKIN_LITE_OPEN_SETTINGS").is_some();
-    app.setActivationPolicy(if open_settings {
-        NSApplicationActivationPolicy::Regular
-    } else {
-        NSApplicationActivationPolicy::Accessory
-    });
+    app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
     let target = ActionTarget::new(controller, state);
     let status_item =
         NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
@@ -161,16 +266,15 @@ pub(super) fn run(controller: ControllerHandle, state: Arc<AppKitState>) -> ! {
     }
     let menu = menu::build_menu(mtm, &target);
     status_item.setMenu(Some(&menu));
-    if open_settings {
-        settings_window::show(
-            mtm,
-            &target,
-            &target.ivars().state,
-            &target.ivars().settings_window,
-        );
-    }
     let _keep_alive: (Retained<ActionTarget>, Retained<NSStatusItem>) = (target, status_item);
     app.finishLaunching();
+    app.activate();
+    settings_window::show(
+        mtm,
+        &_keep_alive.0,
+        &_keep_alive.0.ivars().state,
+        &_keep_alive.0.ivars().settings_window,
+    );
     app.run();
     std::process::exit(0)
 }

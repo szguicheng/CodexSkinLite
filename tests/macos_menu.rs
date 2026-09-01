@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use codex_skin_lite::controller::UiSink;
 use codex_skin_lite::macos::{AppKitSink, AppKitState, MenuAction};
 use codex_skin_lite::model::{AppSettings, AppSnapshot, ConnectionState};
-use codex_skin_lite::theme::ThemeCustomization;
+use codex_skin_lite::theme::{SurfacePart, ThemeCustomization};
 
 #[test]
 fn menu_model_exposes_only_approved_actions() {
@@ -40,4 +40,16 @@ fn publishing_snapshot_notifies_registered_ui_refresher() {
     });
 
     assert_eq!(*seen.lock().unwrap(), vec![ConnectionState::Connected]);
+}
+
+#[test]
+fn customization_draft_bridge_round_trips_selected_surface() {
+    let state = AppKitState::default();
+    let draft = ThemeCustomization::default();
+
+    state.set_customization_draft(draft.clone());
+    state.set_customization_surface(SurfacePart::Composer);
+
+    assert_eq!(state.customization_draft(), Some(draft));
+    assert_eq!(state.customization_surface(), SurfacePart::Composer);
 }

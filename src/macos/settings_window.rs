@@ -27,7 +27,7 @@ pub(super) fn show(
         window.close();
     }
     let snapshot = state.snapshot();
-    let rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(520.0, 430.0));
+    let rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(560.0, 480.0));
     let window = unsafe {
         NSWindow::initWithContentRect_styleMask_backing_defer(
             NSWindow::alloc(mtm),
@@ -43,7 +43,7 @@ pub(super) fn show(
     let content = NSView::initWithFrame(NSView::alloc(mtm), rect);
     window.setContentView(Some(&content));
 
-    add_label(&content, "外观", 24.0, 380.0, 470.0, 24.0, mtm);
+    add_label(&content, "外观", 24.0, 430.0, 500.0, 24.0, mtm);
     let theme_enabled = unsafe {
         NSButton::checkboxWithTitle_target_action(
             &NSString::from_str("启用主题"),
@@ -52,7 +52,7 @@ pub(super) fn show(
             mtm,
         )
     };
-    theme_enabled.setFrameOrigin(NSPoint::new(24.0, 345.0));
+    theme_enabled.setFrameOrigin(NSPoint::new(24.0, 395.0));
     if snapshot
         .as_ref()
         .is_some_and(|value| value.settings.theme_enabled)
@@ -63,7 +63,7 @@ pub(super) fn show(
 
     let popup = NSPopUpButton::initWithFrame_pullsDown(
         NSPopUpButton::alloc(mtm),
-        NSRect::new(NSPoint::new(150.0, 338.0), NSSize::new(220.0, 30.0)),
+        NSRect::new(NSPoint::new(150.0, 388.0), NSSize::new(180.0, 30.0)),
         false,
     );
     for theme in snapshot
@@ -87,12 +87,38 @@ pub(super) fn show(
     add_button(
         &content,
         "导入 ZIP…",
-        385.0,
-        338.0,
-        105.0,
+        340.0,
+        388.0,
+        95.0,
         target,
         sel!(importTheme:),
         mtm,
+    );
+    let gallery = add_button(
+        &content,
+        "远程主题画廊",
+        445.0,
+        388.0,
+        105.0,
+        target,
+        sel!(openThemeGallery:),
+        mtm,
+    );
+    gallery.setToolTip(Some(&NSString::from_str("https://dreamskin.cc/gallery")));
+    let customize_theme = add_button(
+        &content,
+        "自定义主题…",
+        340.0,
+        345.0,
+        150.0,
+        target,
+        sel!(customizeTheme:),
+        mtm,
+    );
+    customize_theme.setEnabled(
+        snapshot
+            .as_ref()
+            .is_some_and(|value| value.settings.active_theme_id.is_some()),
     );
     if snapshot.as_ref().is_some_and(|value| {
         matches!(
@@ -103,16 +129,16 @@ pub(super) fn show(
         add_button(
             &content,
             "确认重启",
-            425.0,
-            85.0,
-            85.0,
+            435.0,
+            100.0,
+            115.0,
             target,
             sel!(confirmRestart:),
             mtm,
         );
     }
 
-    add_label(&content, "布局", 24.0, 285.0, 470.0, 24.0, mtm);
+    add_label(&content, "布局", 24.0, 300.0, 500.0, 24.0, mtm);
     let centered = unsafe {
         NSButton::checkboxWithTitle_target_action(
             &NSString::from_str("对话居中宽度"),
@@ -121,7 +147,7 @@ pub(super) fn show(
             mtm,
         )
     };
-    centered.setFrameOrigin(NSPoint::new(24.0, 250.0));
+    centered.setFrameOrigin(NSPoint::new(24.0, 265.0));
     if snapshot
         .as_ref()
         .is_some_and(|value| value.settings.conversation_centered)
@@ -131,7 +157,7 @@ pub(super) fn show(
     content.addSubview(&centered);
     let width = NSTextField::initWithFrame(
         NSTextField::alloc(mtm),
-        NSRect::new(NSPoint::new(200.0, 245.0), NSSize::new(90.0, 28.0)),
+        NSRect::new(NSPoint::new(200.0, 260.0), NSSize::new(90.0, 28.0)),
     );
     width.setStringValue(&NSString::from_str(
         &snapshot
@@ -149,28 +175,28 @@ pub(super) fn show(
         &content,
         "px（输入后按回车）",
         300.0,
-        250.0,
+        265.0,
         180.0,
         22.0,
         mtm,
     );
 
-    add_label(&content, "Codex", 24.0, 190.0, 470.0, 24.0, mtm);
+    add_label(&content, "Codex", 24.0, 205.0, 500.0, 24.0, mtm);
     let status = snapshot
         .as_ref()
         .map(|value| format!("状态：{:?}", value.connection))
         .unwrap_or_else(|| "状态：未连接".into());
-    let status_label = add_label(&content, &status, 24.0, 158.0, 460.0, 22.0, mtm);
+    let status_label = add_label(&content, &status, 24.0, 173.0, 500.0, 22.0, mtm);
     let app_path = snapshot
         .as_ref()
         .map(|value| value.settings.codex_app_path.display().to_string())
         .unwrap_or_else(|| "/Applications/Codex.app".into());
-    add_label(&content, &app_path, 24.0, 128.0, 460.0, 22.0, mtm);
+    add_label(&content, &app_path, 24.0, 143.0, 500.0, 22.0, mtm);
     add_button(
         &content,
         "选择 Codex.app…",
         24.0,
-        85.0,
+        100.0,
         145.0,
         target,
         sel!(selectCodex:),
@@ -180,7 +206,7 @@ pub(super) fn show(
         &content,
         "打开 Codex",
         185.0,
-        85.0,
+        100.0,
         115.0,
         target,
         sel!(openCodex:),
@@ -190,14 +216,14 @@ pub(super) fn show(
         &content,
         "重新连接",
         315.0,
-        85.0,
+        100.0,
         100.0,
         target,
         sel!(reconnect:),
         mtm,
     );
     if let Some(error) = state.latest_error() {
-        add_label(&content, &error, 24.0, 30.0, 470.0, 42.0, mtm);
+        add_label(&content, &error, 24.0, 35.0, 510.0, 42.0, mtm);
     }
 
     let ui = Arc::new(MainThreadBound::new(
@@ -205,6 +231,7 @@ pub(super) fn show(
             status_label,
             theme_enabled,
             theme_popup: popup,
+            customize_theme,
             centered,
             width,
         },
@@ -223,6 +250,7 @@ struct SettingsUi {
     status_label: Retained<NSTextField>,
     theme_enabled: Retained<NSButton>,
     theme_popup: Retained<NSPopUpButton>,
+    customize_theme: Retained<NSButton>,
     centered: Retained<NSButton>,
     width: Retained<NSTextField>,
 }
@@ -250,6 +278,8 @@ impl SettingsUi {
             &snapshot.settings.conversation_max_width.to_string(),
         ));
         self.theme_popup.removeAllItems();
+        self.customize_theme
+            .setEnabled(snapshot.settings.active_theme_id.is_some());
         for theme in &snapshot.themes {
             self.theme_popup
                 .addItemWithTitle(&NSString::from_str(&theme.id));
@@ -286,7 +316,7 @@ fn add_button(
     target: &AnyObject,
     action: objc2::runtime::Sel,
     mtm: MainThreadMarker,
-) {
+) -> Retained<NSButton> {
     let button = unsafe {
         NSButton::buttonWithTitle_target_action(
             &NSString::from_str(title),
@@ -297,4 +327,5 @@ fn add_button(
     };
     button.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(width, 30.0)));
     content.addSubview(&button);
+    button
 }

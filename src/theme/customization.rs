@@ -7,9 +7,12 @@ use super::safe_css::compile_safe_css;
 
 pub const CUSTOMIZATION_SCHEMA_VERSION: u8 = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum SurfacePart {
+    #[default]
     Main,
     Sidebar,
     Thread,
@@ -36,6 +39,17 @@ impl SurfacePart {
             Self::Message => "message",
             Self::Composer => "composer",
             Self::Header => "header",
+        }
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Main => "主内容区",
+            Self::Sidebar => "侧边栏",
+            Self::Thread => "对话区域",
+            Self::Message => "消息区域",
+            Self::Composer => "输入框",
+            Self::Header => "顶部栏",
         }
     }
 }

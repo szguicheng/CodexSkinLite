@@ -1,4 +1,5 @@
 mod app_delegate;
+mod customization_window;
 mod menu;
 mod settings_window;
 
@@ -6,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::controller::{ControllerHandle, UiSink};
 use crate::model::AppSnapshot;
+use crate::theme::{SurfacePart, ThemeCustomization};
 
 pub use menu::MenuAction;
 
@@ -14,6 +16,8 @@ pub struct AppKitState {
     snapshot: Mutex<Option<AppSnapshot>>,
     errors: Mutex<Vec<String>>,
     refresher: Mutex<Option<UiRefresher>>,
+    customization_draft: Mutex<Option<ThemeCustomization>>,
+    customization_surface: Mutex<SurfacePart>,
 }
 
 type UiRefresher = Arc<dyn Fn(AppSnapshot) + Send + Sync>;
@@ -30,6 +34,35 @@ impl AppKitState {
     pub fn set_refresher(&self, refresher: UiRefresher) {
         if let Ok(mut current) = self.refresher.lock() {
             *current = Some(refresher);
+        }
+    }
+
+    pub fn customization_draft(&self) -> Option<ThemeCustomization> {
+        self.customization_draft.lock().ok()?.clone()
+    }
+
+    pub fn set_customization_draft(&self, draft: ThemeCustomization) {
+        if let Ok(mut current) = self.customization_draft.lock() {
+            *current = Some(draft);
+        }
+    }
+
+    pub fn clear_customization_draft(&self) {
+        if let Ok(mut current) = self.customization_draft.lock() {
+            *current = None;
+        }
+    }
+
+    pub fn customization_surface(&self) -> SurfacePart {
+        self.customization_surface
+            .lock()
+            .map(|current| *current)
+            .unwrap_or_default()
+    }
+
+    pub fn set_customization_surface(&self, surface: SurfacePart) {
+        if let Ok(mut current) = self.customization_surface.lock() {
+            *current = surface;
         }
     }
 }
