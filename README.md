@@ -16,11 +16,24 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license"></a>
 </p>
 
-<p align="center">
-  <img src="resources/CodexSkinLite-codex-preview.png" alt="CodexSkinLite preview showing the Codex interface" width="900">
-</p>
+## Take a look
 
-<p align="center"><sub>The editor uses a real Codex layout for its component preview. Conversation text is intentionally blurred in this repository image.</sub></p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/CodexSkinLite-settings-main.png" alt="CodexSkinLite main settings window">
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/CodexSkinLite-custom-theme.png" alt="CodexSkinLite custom theme editor">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Main settings</sub></td>
+    <td align="center"><sub>Custom theme editor</sub></td>
+  </tr>
+</table>
+
+The custom theme editor uses a real Codex layout and moves a red marker to show which part of Codex a setting controls. The preview image is blurred only to keep private conversation text out of the repository.
 
 ## Why CodexSkinLite?
 
@@ -36,6 +49,14 @@ It works alongside the official Codex app and does not modify the official `Code
 - **Add a softer background** — Use a background image with position, fill mode, and opacity controls.
 - **Choose a more comfortable width** — Keep conversations and the composer centered with a bounded maximum width.
 - **Keep settings per theme** — Your custom adjustments stay with the theme you edited.
+
+## In-app preview
+
+<p align="center">
+  <img src="resources/CodexSkinLite-codex-preview.png" alt="CodexSkinLite preview showing the Codex interface" width="900">
+</p>
+
+<p align="center"><sub>The editor's Codex preview preserves the real interface structure while blurring private conversation text.</sub></p>
 
 ## Download
 
