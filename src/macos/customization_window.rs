@@ -5,12 +5,13 @@ use std::sync::Arc;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::sel;
-use objc2::{MainThreadMarker, MainThreadOnly};
+use objc2::{AnyThread, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSBackingStoreType, NSButton, NSPopUpButton, NSScrollView, NSTextField, NSView, NSWindow,
-    NSWindowStyleMask,
+    NSBackingStoreType, NSBox, NSBoxType, NSButton, NSColor, NSColorSpace, NSColorWell,
+    NSColorWellStyle, NSFont, NSImage, NSImageScaling, NSImageView, NSPopUpButton, NSScrollView,
+    NSTextField, NSTitlePosition, NSView, NSWindow, NSWindowStyleMask,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSData, NSPoint, NSRect, NSSize, NSString};
 
 use crate::theme::{
     BackgroundFillMode, BackgroundImageCustomization, ShadowPreset, SurfacePart, ThemeCustomization,
@@ -36,6 +37,23 @@ const TAG_SURFACE_SHADOW: isize = 1023;
 const TAG_COMPOSER_BOTTOM: isize = 1030;
 const TAG_COMPOSER_HORIZONTAL: isize = 1031;
 const TAG_STATUS: isize = 1040;
+const TAG_PREVIEW_STATUS: isize = 1041;
+const TAG_COLOR_WELL_BACKGROUND: isize = 1050;
+const TAG_COLOR_WELL_PANEL: isize = 1051;
+const TAG_COLOR_WELL_ACCENT: isize = 1052;
+const TAG_COLOR_WELL_TEXT: isize = 1053;
+const TAG_COLOR_WELL_LINE: isize = 1054;
+
+const PREVIEW_SCREEN_WIDTH: f64 = 1920.0;
+const PREVIEW_SCREEN_HEIGHT: f64 = 971.0;
+const PREVIEW_X: f64 = 520.0;
+const PREVIEW_Y: f64 = 285.0;
+const PREVIEW_WIDTH: f64 = 432.0;
+const PREVIEW_HEIGHT: f64 = PREVIEW_WIDTH * PREVIEW_SCREEN_HEIGHT / PREVIEW_SCREEN_WIDTH;
+const PREVIEW_IMAGE_X: f64 = PREVIEW_X;
+const PREVIEW_IMAGE_Y: f64 = PREVIEW_Y;
+const PREVIEW_IMAGE_WIDTH: f64 = PREVIEW_WIDTH;
+const PREVIEW_IMAGE_HEIGHT: f64 = PREVIEW_HEIGHT;
 
 pub(super) fn show(
     mtm: MainThreadMarker,
@@ -58,7 +76,7 @@ pub(super) fn show(
     state.set_customization_draft(draft.clone());
     state.set_customization_surface(SurfacePart::Main);
 
-    let window_rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(660.0, 720.0));
+    let window_rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1040.0, 780.0));
     let window = unsafe {
         NSWindow::initWithContentRect_styleMask_backing_defer(
             NSWindow::alloc(mtm),
@@ -73,40 +91,50 @@ pub(super) fn show(
         theme_id.unwrap_or("无")
     )));
     unsafe { window.setReleasedWhenClosed(false) };
-    window.setMinSize(NSSize::new(560.0, 520.0));
+    window.setMinSize(NSSize::new(920.0, 600.0));
     window.center();
 
     let scroll = NSScrollView::initWithFrame(
         NSScrollView::alloc(mtm),
-        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(660.0, 720.0)),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1040.0, 780.0)),
     );
     scroll.setHasVerticalScroller(true);
     scroll.setDrawsBackground(false);
     let document = NSView::initWithFrame(
         NSView::alloc(mtm),
-        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(640.0, 980.0)),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1000.0, 1120.0)),
     );
     scroll.setDocumentView(Some(&document));
     window.setContentView(Some(&scroll));
 
-    add_label(&document, "主题自定义", 24.0, 930.0, 560.0, 28.0, mtm);
+    add_card(&document, 24.0, 1028.0, 952.0, 72.0, mtm);
+    add_card(&document, 24.0, 815.0, 952.0, 195.0, mtm);
+    add_card(&document, 24.0, 585.0, 952.0, 210.0, mtm);
+    add_card(&document, 24.0, 245.0, 952.0, 320.0, mtm);
+    add_card(&document, 24.0, 100.0, 952.0, 125.0, mtm);
+
+    let heading = add_label(&document, "主题自定义", 48.0, 1058.0, 560.0, 28.0, mtm);
+    heading.setFont(Some(&NSFont::boldSystemFontOfSize(18.0)));
     add_label(
         &document,
-        "预览只应用到当前 Codex，保存后才会写入主题配置。",
-        24.0,
-        902.0,
+        "先点预览看看效果，保存后才会写入这个主题。",
+        48.0,
+        1035.0,
         580.0,
         22.0,
         mtm,
     );
+    add_label(&document, "ฅ^•ﻌ•^ฅ", 875.0, 1045.0, 90.0, 36.0, mtm)
+        .setFont(Some(&NSFont::systemFontOfSize(24.0)));
 
-    add_label(&document, "背景图片", 24.0, 858.0, 300.0, 24.0, mtm);
+    let background_heading = add_label(&document, "背景图片", 48.0, 955.0, 300.0, 24.0, mtm);
+    background_heading.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     add_button(
         &document,
         "选择图片…",
-        24.0,
-        818.0,
-        110.0,
+        48.0,
+        911.0,
+        136.0,
         target,
         sel!(selectCustomizationImage:),
         mtm,
@@ -114,8 +142,8 @@ pub(super) fn show(
     add_label(
         &document,
         &format_image_status(draft.background.image.as_ref()),
-        148.0,
-        822.0,
+        200.0,
+        915.0,
         420.0,
         22.0,
         mtm,
@@ -126,8 +154,8 @@ pub(super) fn show(
         "偏移 X px",
         TAG_BACKGROUND_X,
         &draft.background.offset_x_px.to_string(),
-        24.0,
-        778.0,
+        48.0,
+        858.0,
         mtm,
     );
     add_labeled_field(
@@ -135,18 +163,18 @@ pub(super) fn show(
         "偏移 Y px",
         TAG_BACKGROUND_Y,
         &draft.background.offset_y_px.to_string(),
-        220.0,
-        778.0,
+        300.0,
+        858.0,
         mtm,
     );
-    add_label(&document, "填充", 416.0, 782.0, 50.0, 22.0, mtm);
+    add_label(&document, "填充", 552.0, 862.0, 56.0, 22.0, mtm);
     let fill_popup = add_popup(
         &document,
         TAG_BACKGROUND_FILL_MODE,
         &["覆盖填充", "完整显示", "拉伸填充"],
-        466.0,
-        778.0,
-        130.0,
+        616.0,
+        858.0,
+        170.0,
         target,
         sel!(selectCustomizationFill:),
         mtm,
@@ -157,67 +185,70 @@ pub(super) fn show(
         "透明度 0-100",
         TAG_BACKGROUND_OPACITY,
         &draft.background.opacity.to_string(),
-        24.0,
-        730.0,
+        48.0,
+        816.0,
         mtm,
     );
 
-    add_label(
-        &document,
-        "颜色覆盖（留空表示跟随主题）",
-        24.0,
-        680.0,
-        360.0,
-        24.0,
-        mtm,
-    );
-    add_labeled_field(
+    add_label(&document, "颜色覆盖", 48.0, 755.0, 360.0, 24.0, mtm);
+    add_color_field(
         &document,
         "背景",
         TAG_COLOR_BACKGROUND,
+        TAG_COLOR_WELL_BACKGROUND,
         draft.colors.background.as_deref().unwrap_or_default(),
-        24.0,
-        640.0,
+        48.0,
+        685.0,
+        target,
         mtm,
     );
-    add_labeled_field(
+    add_color_field(
         &document,
         "面板",
         TAG_COLOR_PANEL,
+        TAG_COLOR_WELL_PANEL,
         draft.colors.panel.as_deref().unwrap_or_default(),
-        220.0,
-        640.0,
+        354.0,
+        685.0,
+        target,
         mtm,
     );
-    add_labeled_field(
+    add_color_field(
         &document,
         "强调",
         TAG_COLOR_ACCENT,
+        TAG_COLOR_WELL_ACCENT,
         draft.colors.accent.as_deref().unwrap_or_default(),
-        416.0,
-        640.0,
+        660.0,
+        685.0,
+        target,
         mtm,
     );
-    add_labeled_field(
+    add_color_field(
         &document,
         "文字",
         TAG_COLOR_TEXT,
+        TAG_COLOR_WELL_TEXT,
         draft.colors.text.as_deref().unwrap_or_default(),
-        24.0,
-        592.0,
+        48.0,
+        625.0,
+        target,
         mtm,
     );
-    add_labeled_field(
+    add_color_field(
         &document,
         "分割线",
         TAG_COLOR_LINE,
+        TAG_COLOR_WELL_LINE,
         draft.colors.line.as_deref().unwrap_or_default(),
-        220.0,
-        592.0,
+        354.0,
+        625.0,
+        target,
         mtm,
     );
 
-    add_label(&document, "组件样式", 24.0, 530.0, 300.0, 24.0, mtm);
+    let component_heading = add_label(&document, "组件样式", 48.0, 505.0, 300.0, 24.0, mtm);
+    component_heading.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     let component_popup = add_popup(
         &document,
         TAG_SURFACE_PART,
@@ -225,9 +256,9 @@ pub(super) fn show(
             .into_iter()
             .map(SurfacePart::display_name)
             .collect::<Vec<_>>(),
-        24.0,
-        490.0,
-        230.0,
+        48.0,
+        452.0,
+        280.0,
         target,
         sel!(selectCustomizationComponent:),
         mtm,
@@ -238,8 +269,8 @@ pub(super) fn show(
         "透明度 65-100",
         TAG_SURFACE_OPACITY,
         "",
-        24.0,
-        442.0,
+        48.0,
+        405.0,
         mtm,
     );
     add_labeled_field(
@@ -247,8 +278,8 @@ pub(super) fn show(
         "模糊 px",
         TAG_SURFACE_BLUR,
         "",
-        220.0,
-        442.0,
+        292.0,
+        405.0,
         mtm,
     );
     add_labeled_field(
@@ -256,18 +287,18 @@ pub(super) fn show(
         "圆角 px",
         TAG_SURFACE_RADIUS,
         "",
-        416.0,
-        442.0,
+        48.0,
+        361.0,
         mtm,
     );
-    add_label(&document, "阴影", 24.0, 402.0, 70.0, 22.0, mtm);
+    add_label(&document, "阴影", 292.0, 365.0, 56.0, 22.0, mtm);
     let shadow_popup = add_popup(
         &document,
         TAG_SURFACE_SHADOW,
         &["跟随主题", "无阴影", "柔和", "明显"],
-        96.0,
-        398.0,
-        180.0,
+        348.0,
+        361.0,
+        154.0,
         target,
         sel!(selectCustomizationComponent:),
         mtm,
@@ -277,15 +308,17 @@ pub(super) fn show(
         shadow_popup.setAction(None);
     }
     shadow_popup.selectItemAtIndex(0);
+    add_component_preview(&document, SurfacePart::Main, mtm);
 
-    add_label(&document, "输入框位置", 24.0, 342.0, 300.0, 24.0, mtm);
+    let composer_heading = add_label(&document, "输入框位置", 48.0, 190.0, 300.0, 24.0, mtm);
+    composer_heading.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     add_labeled_field(
         &document,
         "距底部 px",
         TAG_COMPOSER_BOTTOM,
         &draft.composer.bottom_inset_px.to_string(),
-        24.0,
-        302.0,
+        48.0,
+        140.0,
         mtm,
     );
     add_labeled_field(
@@ -293,8 +326,8 @@ pub(super) fn show(
         "左右内缩 px",
         TAG_COMPOSER_HORIZONTAL,
         &draft.composer.horizontal_inset_px.to_string(),
-        220.0,
-        302.0,
+        292.0,
+        140.0,
         mtm,
     );
 
@@ -305,8 +338,8 @@ pub(super) fn show(
         } else {
             "当前未选择主题：此处显示空白草稿"
         },
-        24.0,
-        240.0,
+        48.0,
+        48.0,
         560.0,
         24.0,
         mtm,
@@ -315,9 +348,9 @@ pub(super) fn show(
     add_button(
         &document,
         "预览",
-        24.0,
-        180.0,
-        100.0,
+        536.0,
+        42.0,
+        96.0,
         target,
         sel!(previewCustomization:),
         mtm,
@@ -325,9 +358,9 @@ pub(super) fn show(
     let save = add_button(
         &document,
         "保存",
-        140.0,
-        180.0,
-        100.0,
+        644.0,
+        42.0,
+        96.0,
         target,
         sel!(saveCustomization:),
         mtm,
@@ -336,8 +369,8 @@ pub(super) fn show(
     add_button(
         &document,
         "恢复默认",
-        256.0,
-        180.0,
+        752.0,
+        42.0,
         120.0,
         target,
         sel!(resetCustomization:),
@@ -346,9 +379,9 @@ pub(super) fn show(
     add_button(
         &document,
         "关闭",
-        392.0,
-        180.0,
-        100.0,
+        884.0,
+        42.0,
+        80.0,
         target,
         sel!(closeCustomization:),
         mtm,
@@ -356,8 +389,8 @@ pub(super) fn show(
 
     populate_controls(&document, &draft, SurfacePart::Main);
     let _ = document.scrollRectToVisible(NSRect::new(
-        NSPoint::new(0.0, 720.0),
-        NSSize::new(640.0, 190.0),
+        NSPoint::new(0.0, 760.0),
+        NSSize::new(1000.0, 360.0),
     ));
     window.makeKeyAndOrderFront(None);
     *slot.borrow_mut() = Some(window);
@@ -486,6 +519,203 @@ pub(super) fn set_status(window: &NSWindow, message: &str) {
     }
 }
 
+pub(super) fn sync_hex_from_color_well(window: &NSWindow, well: &NSColorWell) {
+    let Some(field_tag) = color_field_tag(well.tag()) else {
+        return;
+    };
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    set_text_field(&content, field_tag, &hex_from_color(&well.color()));
+}
+
+pub(super) fn sync_color_well_from_field(window: &NSWindow, field: &NSTextField) {
+    let Some(well_tag) = color_well_tag(field.tag()) else {
+        return;
+    };
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    let Some(well) = color_well(&content, well_tag) else {
+        return;
+    };
+    let value = field.stringValue().to_string();
+    if value.trim().is_empty() {
+        well.setColor(&NSColor::clearColor());
+    } else if let Some(color) = color_from_hex(&value) {
+        well.setColor(&color);
+    }
+}
+
+fn add_card(
+    content: &NSView,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    mtm: MainThreadMarker,
+) -> Retained<NSBox> {
+    let card = NSBox::initWithFrame(
+        NSBox::alloc(mtm),
+        NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)),
+    );
+    card.setBoxType(NSBoxType::Custom);
+    card.setTitlePosition(NSTitlePosition::NoTitle);
+    card.setFillColor(&NSColor::controlBackgroundColor());
+    card.setBorderColor(&NSColor::separatorColor());
+    card.setBorderWidth(1.0);
+    card.setCornerRadius(12.0);
+    content.addSubview(&card);
+    card
+}
+
+fn add_preview_box(
+    content: &NSView,
+    _tag: isize,
+    frame: (f64, f64, f64, f64),
+    fill: &NSColor,
+    border: &NSColor,
+    border_width: f64,
+    mtm: MainThreadMarker,
+) -> Retained<NSBox> {
+    let (x, y, width, height) = frame;
+    let box_view = NSBox::initWithFrame(
+        NSBox::alloc(mtm),
+        NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)),
+    );
+    box_view.setBoxType(NSBoxType::Custom);
+    box_view.setTitlePosition(NSTitlePosition::NoTitle);
+    box_view.setFillColor(fill);
+    box_view.setBorderColor(border);
+    box_view.setBorderWidth(border_width);
+    box_view.setCornerRadius(if border_width > 0.0 { 7.0 } else { 0.0 });
+    content.addSubview(&box_view);
+    box_view
+}
+
+fn add_component_preview(content: &NSView, selected: SurfacePart, mtm: MainThreadMarker) {
+    add_card(
+        content,
+        PREVIEW_X,
+        PREVIEW_Y,
+        PREVIEW_WIDTH,
+        PREVIEW_HEIGHT,
+        mtm,
+    );
+    if let Some(image) = codex_preview_image() {
+        let image_view = NSImageView::imageViewWithImage(&image, mtm);
+        image_view.setFrame(NSRect::new(
+            NSPoint::new(PREVIEW_IMAGE_X, PREVIEW_IMAGE_Y),
+            NSSize::new(PREVIEW_IMAGE_WIDTH, PREVIEW_IMAGE_HEIGHT),
+        ));
+        image_view.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+        image_view.setToolTip(Some(&NSString::from_str(
+            "当前 Codex 界面截图，正文已模糊处理",
+        )));
+        content.addSubview(&image_view);
+    }
+    let clear = NSColor::clearColor();
+    add_preview_box(
+        content,
+        0,
+        (PREVIEW_X, PREVIEW_Y, PREVIEW_WIDTH, PREVIEW_HEIGHT),
+        &clear,
+        &NSColor::separatorColor(),
+        1.0,
+        mtm,
+    );
+    for part in SurfacePart::ALL {
+        let (x, y, width, height) = scaled_preview_frame(part);
+        let outline = add_preview_box(
+            content,
+            0,
+            (x, y, width, height),
+            &clear,
+            &NSColor::systemRedColor(),
+            2.0,
+            mtm,
+        );
+        outline.setToolTip(Some(&NSString::from_str(preview_marker_identifier(part))));
+        outline.setHidden(part != selected);
+    }
+    let status = add_label(
+        content,
+        &format!("当前正在修改：{}（截图中的红框）", selected.display_name()),
+        PREVIEW_X,
+        PREVIEW_Y - 29.0,
+        PREVIEW_WIDTH,
+        20.0,
+        mtm,
+    );
+    status.setTag(TAG_PREVIEW_STATUS);
+}
+
+fn codex_preview_image() -> Option<Retained<NSImage>> {
+    let bytes = include_bytes!("../../resources/CodexSkinLite-codex-preview.png");
+    let data = unsafe { NSData::dataWithBytes_length(bytes.as_ptr().cast(), bytes.len()) };
+    NSImage::initWithData(NSImage::alloc(), &data)
+}
+
+fn preview_frame(part: SurfacePart) -> (f64, f64, f64, f64) {
+    match part {
+        SurfacePart::Main => (257.5, 0.0, 1662.5, 971.0),
+        SurfacePart::Sidebar => (0.0, 0.0, 257.5, 971.0),
+        SurfacePart::Thread => (258.0, 0.0, 1662.0, 924.5),
+        SurfacePart::Message => (600.25, 372.5, 1008.0, 70.25),
+        SurfacePart::Composer => (585.25, 16.0, 1008.0, 98.0),
+        SurfacePart::Header => (0.0, 925.0, 1920.0, 46.0),
+    }
+}
+
+fn scaled_preview_frame(part: SurfacePart) -> (f64, f64, f64, f64) {
+    let (x, y, width, height) = preview_frame(part);
+    let scale_x = PREVIEW_IMAGE_WIDTH / PREVIEW_SCREEN_WIDTH;
+    let scale_y = PREVIEW_IMAGE_HEIGHT / PREVIEW_SCREEN_HEIGHT;
+    (
+        PREVIEW_IMAGE_X + x * scale_x,
+        PREVIEW_IMAGE_Y + y * scale_y,
+        width * scale_x,
+        height * scale_y,
+    )
+}
+
+fn preview_marker_matches(title: &str, selected: SurfacePart) -> bool {
+    title == selected.css_name()
+}
+
+fn preview_marker_identifier(part: SurfacePart) -> &'static str {
+    part.css_name()
+}
+
+fn update_preview_selection(content: &NSView, selected: SurfacePart) {
+    update_preview_selection_in_view(content, selected);
+    if let Some(status) = text_field(content, TAG_PREVIEW_STATUS) {
+        status.setStringValue(&NSString::from_str(&format!(
+            "当前正在修改：{}（截图中的红框）",
+            selected.display_name()
+        )));
+    }
+}
+
+fn update_preview_selection_in_view(content: &NSView, selected: SurfacePart) {
+    for view in content.subviews().iter() {
+        if let Some(outline) = view.downcast_ref::<NSBox>() {
+            let title = outline
+                .toolTip()
+                .map(|value| value.to_string())
+                .unwrap_or_default();
+            if SurfacePart::ALL
+                .into_iter()
+                .any(|part| part.css_name() == title)
+            {
+                outline.setHidden(!preview_marker_matches(&title, selected));
+            }
+        } else {
+            update_preview_selection_in_view(&view, selected);
+        }
+    }
+}
+
 fn populate_controls(content: &NSView, draft: &ThemeCustomization, surface: SurfacePart) {
     set_text_field(
         content,
@@ -510,29 +740,34 @@ fn populate_controls(content: &NSView, draft: &ThemeCustomization, surface: Surf
         TAG_BACKGROUND_OPACITY,
         &draft.background.opacity.to_string(),
     );
-    set_text_field(
+    set_color_controls(
         content,
         TAG_COLOR_BACKGROUND,
+        TAG_COLOR_WELL_BACKGROUND,
         draft.colors.background.as_deref().unwrap_or_default(),
     );
-    set_text_field(
+    set_color_controls(
         content,
         TAG_COLOR_PANEL,
+        TAG_COLOR_WELL_PANEL,
         draft.colors.panel.as_deref().unwrap_or_default(),
     );
-    set_text_field(
+    set_color_controls(
         content,
         TAG_COLOR_ACCENT,
+        TAG_COLOR_WELL_ACCENT,
         draft.colors.accent.as_deref().unwrap_or_default(),
     );
-    set_text_field(
+    set_color_controls(
         content,
         TAG_COLOR_TEXT,
+        TAG_COLOR_WELL_TEXT,
         draft.colors.text.as_deref().unwrap_or_default(),
     );
-    set_text_field(
+    set_color_controls(
         content,
         TAG_COLOR_LINE,
+        TAG_COLOR_WELL_LINE,
         draft.colors.line.as_deref().unwrap_or_default(),
     );
     if let Some(popup) = popup(content, TAG_SURFACE_PART) {
@@ -554,6 +789,7 @@ fn populate_controls(content: &NSView, draft: &ThemeCustomization, surface: Surf
         &draft.composer.horizontal_inset_px.to_string(),
     );
     set_status_on_view(content, TAG_STATUS, "未预览");
+    update_preview_selection(content, surface);
 }
 
 fn populate_surface_controls(content: &NSView, draft: &ThemeCustomization, surface: SurfacePart) {
@@ -591,6 +827,7 @@ fn populate_surface_controls(content: &NSView, draft: &ThemeCustomization, surfa
     if let Some(popup) = popup(content, TAG_SURFACE_SHADOW) {
         popup.selectItemAtIndex(shadow_index);
     }
+    update_preview_selection(content, surface);
 }
 
 fn format_image_status(image: Option<&BackgroundImageCustomization>) -> String {
@@ -681,6 +918,114 @@ fn read_bounded_i16(
     Ok(parsed.clamp(minimum, maximum) as i16)
 }
 
+fn hex_rgba(value: &str) -> Option<(u8, u8, u8, u8)> {
+    let digits = value.trim().strip_prefix('#')?;
+    let expand = |digit: u8| (digit << 4) | digit;
+    let byte = |pair: &str| u8::from_str_radix(pair, 16).ok();
+    match digits.len() {
+        3 => Some((
+            expand(hex_nibble(digits.as_bytes()[0])?),
+            expand(hex_nibble(digits.as_bytes()[1])?),
+            expand(hex_nibble(digits.as_bytes()[2])?),
+            0xff,
+        )),
+        4 => Some((
+            expand(hex_nibble(digits.as_bytes()[0])?),
+            expand(hex_nibble(digits.as_bytes()[1])?),
+            expand(hex_nibble(digits.as_bytes()[2])?),
+            expand(hex_nibble(digits.as_bytes()[3])?),
+        )),
+        6 => Some((
+            byte(&digits[0..2])?,
+            byte(&digits[2..4])?,
+            byte(&digits[4..6])?,
+            0xff,
+        )),
+        8 => Some((
+            byte(&digits[0..2])?,
+            byte(&digits[2..4])?,
+            byte(&digits[4..6])?,
+            byte(&digits[6..8])?,
+        )),
+        _ => None,
+    }
+}
+
+fn hex_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn color_from_hex(value: &str) -> Option<Retained<NSColor>> {
+    let (red, green, blue, alpha) = hex_rgba(value)?;
+    Some(NSColor::colorWithSRGBRed_green_blue_alpha(
+        f64::from(red) / 255.0,
+        f64::from(green) / 255.0,
+        f64::from(blue) / 255.0,
+        f64::from(alpha) / 255.0,
+    ))
+}
+
+fn hex_from_color(color: &NSColor) -> String {
+    let space = NSColorSpace::sRGBColorSpace();
+    let Some(color) = color.colorUsingColorSpace(&space) else {
+        return "#000000".into();
+    };
+    let component = |value: f64| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let red = component(color.redComponent());
+    let green = component(color.greenComponent());
+    let blue = component(color.blueComponent());
+    let alpha = component(color.alphaComponent());
+    if alpha == 0xff {
+        format!("#{red:02x}{green:02x}{blue:02x}")
+    } else {
+        format!("#{red:02x}{green:02x}{blue:02x}{alpha:02x}")
+    }
+}
+
+fn color_well(content: &NSView, tag: isize) -> Option<Retained<NSColorWell>> {
+    content
+        .viewWithTag(tag)
+        .and_then(|view| view.downcast::<NSColorWell>().ok())
+}
+
+fn color_well_tag(field_tag: isize) -> Option<isize> {
+    match field_tag {
+        TAG_COLOR_BACKGROUND => Some(TAG_COLOR_WELL_BACKGROUND),
+        TAG_COLOR_PANEL => Some(TAG_COLOR_WELL_PANEL),
+        TAG_COLOR_ACCENT => Some(TAG_COLOR_WELL_ACCENT),
+        TAG_COLOR_TEXT => Some(TAG_COLOR_WELL_TEXT),
+        TAG_COLOR_LINE => Some(TAG_COLOR_WELL_LINE),
+        _ => None,
+    }
+}
+
+fn color_field_tag(well_tag: isize) -> Option<isize> {
+    match well_tag {
+        TAG_COLOR_WELL_BACKGROUND => Some(TAG_COLOR_BACKGROUND),
+        TAG_COLOR_WELL_PANEL => Some(TAG_COLOR_PANEL),
+        TAG_COLOR_WELL_ACCENT => Some(TAG_COLOR_ACCENT),
+        TAG_COLOR_WELL_TEXT => Some(TAG_COLOR_TEXT),
+        TAG_COLOR_WELL_LINE => Some(TAG_COLOR_LINE),
+        _ => None,
+    }
+}
+
+fn set_color_controls(content: &NSView, field_tag: isize, well_tag: isize, value: &str) {
+    set_text_field(content, field_tag, value);
+    if let Some(well) = color_well(content, well_tag) {
+        if let Some(color) = color_from_hex(value) {
+            well.setColor(&color);
+        } else {
+            well.setColor(&NSColor::clearColor());
+        }
+    }
+}
+
 fn text_field(content: &NSView, tag: isize) -> Option<Retained<NSTextField>> {
     content
         .viewWithTag(tag)
@@ -721,6 +1066,55 @@ fn add_labeled_field(
     );
     field.setTag(tag);
     field.setStringValue(&NSString::from_str(value));
+    content.addSubview(&field);
+    field
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_color_field(
+    content: &NSView,
+    label: &str,
+    field_tag: isize,
+    well_tag: isize,
+    value: &str,
+    x: f64,
+    y: f64,
+    target: &AnyObject,
+    mtm: MainThreadMarker,
+) -> Retained<NSTextField> {
+    add_label(content, label, x, y + 4.0, 52.0, 22.0, mtm);
+    let well = NSColorWell::colorWellWithStyle(NSColorWellStyle::Minimal, mtm);
+    well.setFrame(NSRect::new(
+        NSPoint::new(x + 54.0, y),
+        NSSize::new(30.0, 28.0),
+    ));
+    well.setTag(well_tag);
+    well.setSupportsAlpha(true);
+    well.setToolTip(Some(&NSString::from_str("点击打开 macOS 色板")));
+    if let Some(color) = color_from_hex(value) {
+        well.setColor(&color);
+    } else {
+        well.setColor(&NSColor::clearColor());
+    }
+    unsafe {
+        well.setTarget(Some(target));
+        well.setAction(Some(sel!(selectCustomizationColor:)));
+    }
+    content.addSubview(&well);
+
+    let field = NSTextField::initWithFrame(
+        NSTextField::alloc(mtm),
+        NSRect::new(NSPoint::new(x + 90.0, y), NSSize::new(112.0, 28.0)),
+    );
+    field.setTag(field_tag);
+    field.setStringValue(&NSString::from_str(value));
+    field.setToolTip(Some(&NSString::from_str(
+        "支持 #RGB、#RGBA、#RRGGBB、#RRGGBBAA",
+    )));
+    unsafe {
+        field.setTarget(Some(target));
+        field.setAction(Some(sel!(editCustomizationColor:)));
+    }
     content.addSubview(&field);
     field
 }
@@ -791,4 +1185,56 @@ fn add_button(
     button.setFrame(NSRect::new(NSPoint::new(x, y), NSSize::new(width, 30.0)));
     content.addSubview(&button);
     button
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn color_hex_components_accept_short_and_alpha_forms() {
+        assert_eq!(hex_rgba("#abc"), Some((0xaa, 0xbb, 0xcc, 0xff)));
+        assert_eq!(hex_rgba("#11223344"), Some((0x11, 0x22, 0x33, 0x44)));
+        assert_eq!(hex_rgba("blue"), None);
+    }
+
+    #[test]
+    fn preview_frames_identify_the_selected_codex_surface() {
+        assert_eq!(
+            preview_frame(SurfacePart::Sidebar),
+            (0.0, 0.0, 257.5, 971.0)
+        );
+        assert_eq!(
+            preview_frame(SurfacePart::Main),
+            (257.5, 0.0, 1662.5, 971.0)
+        );
+        assert_eq!(
+            preview_frame(SurfacePart::Thread),
+            (258.0, 0.0, 1662.0, 924.5)
+        );
+        assert_eq!(
+            preview_frame(SurfacePart::Message),
+            (600.25, 372.5, 1008.0, 70.25)
+        );
+        assert_eq!(
+            preview_frame(SurfacePart::Composer),
+            (585.25, 16.0, 1008.0, 98.0)
+        );
+        assert_eq!(
+            preview_frame(SurfacePart::Header),
+            (0.0, 925.0, 1920.0, 46.0)
+        );
+    }
+
+    #[test]
+    fn preview_marker_names_identify_the_selected_surface() {
+        assert!(preview_marker_matches("composer", SurfacePart::Composer));
+        assert!(!preview_marker_matches("main", SurfacePart::Composer));
+    }
+
+    #[test]
+    fn preview_marker_identifiers_are_stable() {
+        assert_eq!(preview_marker_identifier(SurfacePart::Composer), "composer");
+        assert_eq!(preview_marker_identifier(SurfacePart::Header), "header");
+    }
 }

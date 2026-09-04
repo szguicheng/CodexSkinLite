@@ -5,9 +5,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSButton, NSControlStateValueOn, NSOpenPanel,
-    NSPopUpButton, NSStatusBar, NSStatusItem, NSTextField, NSVariableStatusItemLength, NSWindow,
-    NSWorkspace,
+    NSApplication, NSApplicationActivationPolicy, NSButton, NSColorWell, NSControlStateValueOn,
+    NSOpenPanel, NSPopUpButton, NSStatusBar, NSStatusItem, NSTextField, NSVariableStatusItemLength,
+    NSWindow, NSWorkspace,
 };
 use objc2_foundation::{NSObjectProtocol, NSString, NSURL};
 
@@ -101,6 +101,24 @@ define_class!(
                 Ok(()) => {}
                 Err(error) => customization_window::set_status(window, &error),
             }
+        }
+
+        #[unsafe(method(selectCustomizationColor:))]
+        fn select_customization_color(&self, sender: &NSColorWell) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            customization_window::sync_hex_from_color_well(window, sender);
+        }
+
+        #[unsafe(method(editCustomizationColor:))]
+        fn edit_customization_color(&self, sender: &NSTextField) {
+            let windows = self.ivars().customization_window.borrow();
+            let Some(window) = windows.as_ref() else {
+                return;
+            };
+            customization_window::sync_color_well_from_field(window, sender);
         }
 
         #[unsafe(method(selectCustomizationImage:))]

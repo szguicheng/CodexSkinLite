@@ -6,8 +6,9 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{MainThreadOnly, sel};
 use objc2_app_kit::{
-    NSBackingStoreType, NSButton, NSControlStateValueOff, NSControlStateValueOn, NSPopUpButton,
-    NSTextField, NSView, NSWindow, NSWindowStyleMask,
+    NSBackingStoreType, NSBox, NSBoxType, NSButton, NSColor, NSControlStateValueOff,
+    NSControlStateValueOn, NSFont, NSPopUpButton, NSTextField, NSTitlePosition, NSView, NSWindow,
+    NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
@@ -27,7 +28,7 @@ pub(super) fn show(
         window.close();
     }
     let snapshot = state.snapshot();
-    let rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(560.0, 480.0));
+    let rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(640.0, 620.0));
     let window = unsafe {
         NSWindow::initWithContentRect_styleMask_backing_defer(
             NSWindow::alloc(mtm),
@@ -39,11 +40,41 @@ pub(super) fn show(
     };
     window.setTitle(&NSString::from_str("CodexSkinLite 设置"));
     unsafe { window.setReleasedWhenClosed(false) };
+    window.setMinSize(NSSize::new(600.0, 560.0));
     window.center();
     let content = NSView::initWithFrame(NSView::alloc(mtm), rect);
     window.setContentView(Some(&content));
 
-    add_label(&content, "外观", 24.0, 430.0, 500.0, 24.0, mtm);
+    add_card(&content, 16.0, 476.0, 608.0, 124.0, mtm);
+    add_card(&content, 16.0, 322.0, 608.0, 140.0, mtm);
+    add_card(&content, 16.0, 214.0, 608.0, 92.0, mtm);
+    add_card(&content, 16.0, 16.0, 608.0, 182.0, mtm);
+
+    let title = add_label(&content, "CodexSkinLite", 36.0, 548.0, 360.0, 30.0, mtm);
+    title.setFont(Some(&NSFont::boldSystemFontOfSize(20.0)));
+    add_label(
+        &content,
+        "给你的 Codex 换一件轻盈、可爱的外套",
+        36.0,
+        518.0,
+        390.0,
+        22.0,
+        mtm,
+    );
+    let cat = add_label(&content, "ฅ^•ﻌ•^ฅ", 510.0, 520.0, 100.0, 36.0, mtm);
+    cat.setFont(Some(&NSFont::systemFontOfSize(24.0)));
+    add_label(
+        &content,
+        "主题 · 宽度 · 连接",
+        36.0,
+        492.0,
+        300.0,
+        20.0,
+        mtm,
+    );
+
+    let appearance = add_label(&content, "外观", 36.0, 430.0, 500.0, 24.0, mtm);
+    appearance.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     let theme_enabled = unsafe {
         NSButton::checkboxWithTitle_target_action(
             &NSString::from_str("启用主题"),
@@ -52,7 +83,7 @@ pub(super) fn show(
             mtm,
         )
     };
-    theme_enabled.setFrameOrigin(NSPoint::new(24.0, 395.0));
+    theme_enabled.setFrameOrigin(NSPoint::new(36.0, 388.0));
     if snapshot
         .as_ref()
         .is_some_and(|value| value.settings.theme_enabled)
@@ -63,7 +94,7 @@ pub(super) fn show(
 
     let popup = NSPopUpButton::initWithFrame_pullsDown(
         NSPopUpButton::alloc(mtm),
-        NSRect::new(NSPoint::new(150.0, 388.0), NSSize::new(180.0, 30.0)),
+        NSRect::new(NSPoint::new(160.0, 381.0), NSSize::new(180.0, 30.0)),
         false,
     );
     popup.addItemWithTitle(&NSString::from_str("无"));
@@ -90,9 +121,9 @@ pub(super) fn show(
     add_button(
         &content,
         "导入 ZIP…",
-        340.0,
-        388.0,
-        95.0,
+        360.0,
+        381.0,
+        100.0,
         target,
         sel!(importTheme:),
         mtm,
@@ -100,9 +131,9 @@ pub(super) fn show(
     let gallery = add_button(
         &content,
         "远程主题画廊",
-        445.0,
-        388.0,
-        105.0,
+        468.0,
+        381.0,
+        135.0,
         target,
         sel!(openThemeGallery:),
         mtm,
@@ -111,8 +142,8 @@ pub(super) fn show(
     let customize_theme = add_button(
         &content,
         "自定义主题…",
-        340.0,
-        345.0,
+        360.0,
+        338.0,
         150.0,
         target,
         sel!(customizeTheme:),
@@ -128,8 +159,8 @@ pub(super) fn show(
         add_button(
             &content,
             "确认重启",
-            435.0,
-            100.0,
+            480.0,
+            62.0,
             115.0,
             target,
             sel!(confirmRestart:),
@@ -137,7 +168,8 @@ pub(super) fn show(
         );
     }
 
-    add_label(&content, "布局", 24.0, 300.0, 500.0, 24.0, mtm);
+    let layout = add_label(&content, "布局", 36.0, 272.0, 500.0, 24.0, mtm);
+    layout.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     let centered = unsafe {
         NSButton::checkboxWithTitle_target_action(
             &NSString::from_str("对话居中宽度"),
@@ -146,7 +178,7 @@ pub(super) fn show(
             mtm,
         )
     };
-    centered.setFrameOrigin(NSPoint::new(24.0, 265.0));
+    centered.setFrameOrigin(NSPoint::new(36.0, 237.0));
     if snapshot
         .as_ref()
         .is_some_and(|value| value.settings.conversation_centered)
@@ -156,7 +188,7 @@ pub(super) fn show(
     content.addSubview(&centered);
     let width = NSTextField::initWithFrame(
         NSTextField::alloc(mtm),
-        NSRect::new(NSPoint::new(200.0, 260.0), NSSize::new(90.0, 28.0)),
+        NSRect::new(NSPoint::new(210.0, 232.0), NSSize::new(90.0, 28.0)),
     );
     width.setStringValue(&NSString::from_str(
         &snapshot
@@ -173,29 +205,30 @@ pub(super) fn show(
     add_label(
         &content,
         "px（输入后按回车）",
-        300.0,
-        265.0,
+        310.0,
+        237.0,
         180.0,
         22.0,
         mtm,
     );
 
-    add_label(&content, "Codex", 24.0, 205.0, 500.0, 24.0, mtm);
+    let codex = add_label(&content, "Codex", 36.0, 168.0, 500.0, 24.0, mtm);
+    codex.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     let status = snapshot
         .as_ref()
         .map(|value| format!("状态：{:?}", value.connection))
         .unwrap_or_else(|| "状态：未连接".into());
-    let status_label = add_label(&content, &status, 24.0, 173.0, 500.0, 22.0, mtm);
+    let status_label = add_label(&content, &status, 36.0, 140.0, 500.0, 22.0, mtm);
     let app_path = snapshot
         .as_ref()
         .map(|value| value.settings.codex_app_path.display().to_string())
         .unwrap_or_else(|| "/Applications/Codex.app".into());
-    add_label(&content, &app_path, 24.0, 143.0, 500.0, 22.0, mtm);
+    add_label(&content, &app_path, 36.0, 110.0, 560.0, 22.0, mtm);
     add_button(
         &content,
         "选择 Codex.app…",
-        24.0,
-        100.0,
+        36.0,
+        62.0,
         145.0,
         target,
         sel!(selectCodex:),
@@ -204,8 +237,8 @@ pub(super) fn show(
     add_button(
         &content,
         "打开 Codex",
-        185.0,
-        100.0,
+        200.0,
+        62.0,
         115.0,
         target,
         sel!(openCodex:),
@@ -214,15 +247,15 @@ pub(super) fn show(
     add_button(
         &content,
         "重新连接",
-        315.0,
-        100.0,
+        330.0,
+        62.0,
         100.0,
         target,
         sel!(reconnect:),
         mtm,
     );
     if let Some(error) = state.latest_error() {
-        add_label(&content, &error, 24.0, 35.0, 510.0, 42.0, mtm);
+        add_label(&content, &error, 36.0, 28.0, 560.0, 28.0, mtm);
     }
 
     let ui = Arc::new(MainThreadBound::new(
@@ -292,6 +325,28 @@ impl SettingsUi {
                 .selectItemWithTitle(&NSString::from_str("无"));
         }
     }
+}
+
+fn add_card(
+    content: &NSView,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    mtm: MainThreadMarker,
+) -> Retained<NSBox> {
+    let card = NSBox::initWithFrame(
+        NSBox::alloc(mtm),
+        NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)),
+    );
+    card.setBoxType(NSBoxType::Custom);
+    card.setTitlePosition(NSTitlePosition::NoTitle);
+    card.setFillColor(&NSColor::controlBackgroundColor());
+    card.setBorderColor(&NSColor::separatorColor());
+    card.setBorderWidth(1.0);
+    card.setCornerRadius(12.0);
+    content.addSubview(&card);
+    card
 }
 
 fn add_label(

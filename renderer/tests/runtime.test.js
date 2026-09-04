@@ -444,6 +444,41 @@ describe("composer regressions", () => {
     }
   });
 
+  it("ignores the full-window browser webview host and recovers after panel collapse", async () => {
+    const window = installRuntime({
+      fixture: "modernScrollingComposerWithModernRightPanel",
+    });
+    const tabs = window.document.querySelector('[data-app-shell-tabs="true"]');
+    const host = window.document.querySelector(
+      "[data-browser-sidebar-webview-host-root]",
+    );
+    const webview = window.document.querySelector("[data-browser-sidebar-webview]");
+    const content = window.document.querySelector("[data-csl-thread-content]");
+    const rect = (left, right) => ({
+      bottom: 800,
+      height: 800,
+      left,
+      right,
+      top: 0,
+      width: right - left,
+      x: left,
+      y: 0,
+    });
+    host.getBoundingClientRect = () => rect(0, 1200);
+
+    await window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+
+    expect(content.style.marginLeft).toBe("0px");
+    expect(content.style.marginRight).toBe("300px");
+
+    tabs.style.visibility = "hidden";
+    webview.style.visibility = "hidden";
+    await nextFrame(window);
+
+    expect(content.style.marginLeft).toBe("150px");
+    expect(content.style.marginRight).toBe("150px");
+  });
+
   it("makes the native title surface transparent under a themed header", () => {
     const window = installRuntime({ fixture: "modernHeaderTitle" });
     const titleSurface = window.document.querySelector(

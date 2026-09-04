@@ -6,9 +6,16 @@ fn release_package_declares_icon_and_developer_id_signing() {
     let script = std::fs::read_to_string("scripts/package-app.sh").unwrap();
 
     assert!(Path::new("resources/CodexSkinLite-icon.png").exists());
+    assert!(Path::new("resources/CodexSkinLite-codex-preview.png").exists());
     assert!(plist.contains("<key>CFBundleIconFile</key>"));
     assert!(plist.contains("<string>CodexSkinLite.icns</string>"));
     assert!(script.contains("iconutil -c icns"));
     assert!(script.contains("Developer ID Application"));
     assert!(script.contains("codesign --force"));
+    assert!(script.contains("xcrun notarytool submit"));
+    assert!(script.contains("NOTARY_PROFILE"));
+    assert!(script.contains("NOTARY_KEYCHAIN"));
+    assert!(script.contains("--keychain \"$notary_keychain\""));
+    assert!(script.contains("xcrun stapler staple"));
+    assert!(script.contains("xcrun stapler validate"));
 }

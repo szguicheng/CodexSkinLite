@@ -9,6 +9,13 @@ if [[ "$(uname -m)" != "arm64" ]]; then
   exit 1
 fi
 
+notary_profile="${NOTARY_PROFILE:-}"
+if [[ -z "$notary_profile" ]]; then
+  echo "Set NOTARY_PROFILE to a keychain profile created with xcrun notarytool store-credentials" >&2
+  exit 1
+fi
+notary_keychain="${NOTARY_KEYCHAIN:-}"
+
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
@@ -63,6 +70,17 @@ fi
 codesign --force --options runtime --timestamp \
   --sign "$signing_identity" "$app_dir"
 codesign --verify --deep --strict --verbose=2 "$app_dir"
+
+notary_archive="$stage_dir/CodexSkinLite-notary.zip"
+ditto -c -k --sequesterRsrc --keepParent \
+  "$app_dir" "$notary_archive"
+notary_args=(xcrun notarytool submit "$notary_archive" --keychain-profile "$notary_profile")
+if [[ -n "$notary_keychain" ]]; then
+  notary_args+=(--keychain "$notary_keychain")
+fi
+"${notary_args[@]}" --wait
+xcrun stapler staple "$app_dir"
+xcrun stapler validate "$app_dir"
 
 version="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
 archive="dist/CodexSkinLite-${version}-macos-arm64.zip"

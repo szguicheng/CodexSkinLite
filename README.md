@@ -1,62 +1,92 @@
 # CodexSkinLite
 
-CodexSkinLite is a lightweight, Apple Silicon-only macOS utility for three
-Codex desktop customizations:
+<p align="center">
+  <img src="resources/CodexSkinLite-icon.png" alt="CodexSkinLite icon" width="112">
+</p>
 
-- importing and applying DreamSkin-compatible themes;
-- constraining the conversation and composer to a centered maximum width.
-- previewing and saving bounded visual and composer-position overrides per theme.
+<h3 align="center">Make Codex feel like yours.</h3>
 
-The project uses a native Rust/AppKit status item and a small CDP-injected
-renderer. It does not modify the official `Codex.app` bundle.
+<p align="center">
+  A small macOS companion for giving the Codex desktop app a warmer, more personal look.
+</p>
 
-## Usage
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-111111?logo=apple&logoColor=white" alt="Apple Silicon Mac">
+  <img src="https://img.shields.io/badge/themes-DreamSkin%20compatible-e58b67" alt="DreamSkin compatible themes">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license"></a>
+</p>
 
-1. Start CodexSkinLite. Settings opens automatically once on every launch.
-2. Import a DreamSkin ZIP package, or open the remote theme gallery from the
-   Appearance section: https://dreamskin.cc/gallery.
-3. Choose “无” to use no theme, or choose an imported theme ID and enable it.
-4. Open “自定义主题…” to adjust colors, surface appearance, and the composer
-   inset. The background section also supports choosing a replacement image,
-   pixel X/Y offset, cover/contain/stretch fill, and image opacity. A selected
-   theme starts with its package values; “无” opens an empty draft. Click
-   “预览” to apply the draft temporarily, then click “保存” to write it to
-   the theme.
-5. Enable centered conversation width and enter a width from 320 to 4000 px.
-6. Use “Open Codex” from CodexSkinLite so Codex starts with a loopback CDP port.
+<p align="center">
+  <img src="resources/CodexSkinLite-codex-preview.png" alt="CodexSkinLite preview showing the Codex interface" width="900">
+</p>
 
-Per-theme overrides are stored in
-`~/Library/Application Support/CodexSkinLite/themes/<theme-id>/customization.json`.
-The original ZIP and its `theme.json`/`theme.css` files are not modified.
+<p align="center"><sub>The editor uses a real Codex layout for its component preview. Conversation text is intentionally blurred in this repository image.</sub></p>
 
-Codex already running without CDP is never terminated automatically. Open
-Settings after the restart-required state appears and choose “确认重启”.
+## Why CodexSkinLite?
 
-## Development
+Codex is a great place to work, but it does not have to look the same for everyone. CodexSkinLite adds a gentle customization layer for people who want a calmer workspace, a favorite color palette, or a little more personality around their chats.
 
-The approved design and implementation plan are under `docs/superpowers/`.
+It works alongside the official Codex app and does not modify the official `Codex.app` bundle.
+
+## What you can do
+
+- **Bring your own theme** — Import DreamSkin-compatible theme ZIPs or browse the theme gallery.
+- **Tune the details** — Adjust colors, transparency, blur, corner radius, shadows, and the composer position.
+- **See what you are changing** — The custom theme editor shows the real Codex layout and moves a red marker to the selected component.
+- **Add a softer background** — Use a background image with position, fill mode, and opacity controls.
+- **Choose a more comfortable width** — Keep conversations and the composer centered with a bounded maximum width.
+- **Keep settings per theme** — Your custom adjustments stay with the theme you edited.
+
+## Download
+
+Download the latest signed and Apple-notarized Apple Silicon build from [Releases](https://github.com/szguicheng/CodexSkinLite/releases/latest).
+
+## Install
+
+1. Download the latest `CodexSkinLite-<version>-macos-arm64.zip` from Releases.
+2. Unzip it and move `CodexSkinLite.app` to your Applications folder.
+3. Open CodexSkinLite.
+4. Use **Open Codex** in CodexSkinLite when you want Codex to start with your saved appearance settings.
+
+CodexSkinLite currently supports Apple Silicon Macs (`M1` and later) with the Codex desktop app installed.
+
+## Make your first look
+
+1. Open the CodexSkinLite settings window.
+2. Import a theme ZIP, or open the [DreamSkin theme gallery](https://dreamskin.cc/gallery).
+3. Select a theme and enable it.
+4. Open **Custom Theme** to choose colors, a background image, and component styles.
+5. Select a component to see exactly which part of the Codex interface it controls.
+6. Use **Preview** to try the changes, then **Save** when the look feels right.
+
+Your theme package stays unchanged. CodexSkinLite stores your personal adjustments separately, so you can return to the original theme at any time.
+
+## A few useful notes
+
+- If Codex was already open, launch it through **Open Codex** so CodexSkinLite can connect cleanly.
+- An existing Codex session is not terminated automatically just because it was started without CodexSkinLite.
+- Imported themes and customizations are kept locally in your macOS Application Support folder.
+- If a theme ever needs a clean start, choose **None** or reset its customization from the settings window.
+
+## For contributors
+
+<details>
+<summary>Build and test locally</summary>
 
 ```bash
 cargo test --all-targets
 npm ci --prefix renderer
 npm test --prefix renderer
-bash scripts/package-app.sh
 ```
 
-## Requirements
+The packaged app is built for Apple Silicon. Release packaging requires a Developer ID Application certificate and an Apple notarytool keychain profile.
 
-- Apple Silicon Mac
-- Rust 1.97 or newer
-- Node.js for renderer tests only
+</details>
 
-## License and provenance
+## License and attribution
 
-CodexSkinLite is licensed under `AGPL-3.0-only`. See `NOTICE` for Codex++
-attribution.
+CodexSkinLite is licensed under the [GNU Affero General Public License v3.0 only](LICENSE).
 
-## Application signing
+The project contains adapted compatibility concepts and code from [CodexPlusPlus](https://github.com/BigPizzaV3/CodexPlusPlus). See [NOTICE](NOTICE) for attribution and additional context.
 
-Release ZIPs are signed with a Developer ID Application certificate but are
-not notarized yet. On another Mac, use Finder's Open action once if Gatekeeper
-shows an unidentified-developer warning. Direct opening without that warning
-requires a separately notarized release.
+Codex is a product of OpenAI. CodexSkinLite is an independent utility and is not affiliated with or endorsed by OpenAI.

@@ -128,6 +128,12 @@
   ]);
 
   const queryAll = (root, selector) => [...root.querySelectorAll(selector)];
+  const layoutSidebars = (sidebars) =>
+    sidebars.filter(
+      (node) =>
+        !isHidden(node) &&
+        !node.matches("[data-browser-sidebar-webview-host-root]"),
+    );
 
   const markParts = () => {
     const desired = new Map();
@@ -376,6 +382,9 @@
 
   const mutationAffectsLayout = (record) => {
     if (record.type === "attributes") {
+      if (record.attributeName === "style") {
+        return record.target?.matches?.(SIDEBAR_SELECTOR) || false;
+      }
       return record.target?.matches?.(LAYOUT_SELECTOR) || false;
     }
     const nodes = [...record.addedNodes, ...record.removedNodes];
@@ -478,6 +487,7 @@
         attributeFilter: [
           "class",
           "hidden",
+          "style",
           "data-state",
           "aria-hidden",
           "data-app-shell-main-content-layout",
@@ -489,9 +499,12 @@
       state.resizeObserver = new ResizeObserver(() => schedule("resize"));
     }
     const nextResizeNodes = new Set(
-      [layout.main, layout.content, layout.composer, ...layout.sidebars].filter(
-        (node) => node?.isConnected,
-      ),
+      [
+        layout.main,
+        layout.content,
+        layout.composer,
+        ...layoutSidebars(layout.sidebars),
+      ].filter((node) => node?.isConnected),
     );
     for (const node of state.observedResizeNodes) {
       if (!nextResizeNodes.has(node)) state.resizeObserver.unobserve(node);
@@ -577,7 +590,7 @@
     if (mainRect?.width > 0) {
       let availableLeft = mainRect.left;
       let availableRight = mainRect.right;
-      for (const sidebar of layout.sidebars) {
+      for (const sidebar of layoutSidebars(layout.sidebars)) {
         const rect = sidebar.getBoundingClientRect();
         const overlap =
           Math.min(mainRect.right, rect.right) -
