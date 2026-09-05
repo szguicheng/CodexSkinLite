@@ -14,7 +14,7 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use dispatch2::MainThreadBound;
 
-use crate::model::AppSnapshot;
+use crate::model::{AppSnapshot, ConnectionState};
 
 use super::AppKitState;
 
@@ -216,9 +216,10 @@ pub(super) fn show(
     codex.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
     let status = snapshot
         .as_ref()
-        .map(|value| format!("状态：{:?}", value.connection))
+        .map(|value| connection_status(&value.connection))
         .unwrap_or_else(|| "状态：未连接".into());
     let status_label = add_label(&content, &status, 36.0, 140.0, 500.0, 22.0, mtm);
+    status_label.setToolTip(Some(&NSString::from_str(&status)));
     let app_path = snapshot
         .as_ref()
         .map(|value| value.settings.codex_app_path.display().to_string())
@@ -254,6 +255,19 @@ pub(super) fn show(
         sel!(reconnect:),
         mtm,
     );
+    let disconnect = add_button(
+        &content,
+        "断开连接",
+        450.0,
+        62.0,
+        100.0,
+        target,
+        sel!(disconnect:),
+        mtm,
+    );
+    disconnect.setToolTip(Some(&NSString::from_str(
+        "撤销主题和布局并停止注入；保留 Codex 与正在进行的任务。重新连接后恢复保存的设置。",
+    )));
     if let Some(error) = state.latest_error() {
         add_label(&content, &error, 36.0, 28.0, 560.0, 28.0, mtm);
     }
@@ -290,11 +304,9 @@ struct SettingsUi {
 
 impl SettingsUi {
     fn refresh(&self, snapshot: &AppSnapshot) {
-        self.status_label
-            .setStringValue(&NSString::from_str(&format!(
-                "状态：{:?}",
-                snapshot.connection
-            )));
+        let status = NSString::from_str(&connection_status(&snapshot.connection));
+        self.status_label.setStringValue(&status);
+        self.status_label.setToolTip(Some(&status));
         self.theme_enabled
             .setState(if snapshot.settings.theme_enabled {
                 NSControlStateValueOn
@@ -324,6 +336,17 @@ impl SettingsUi {
             self.theme_popup
                 .selectItemWithTitle(&NSString::from_str("无"));
         }
+    }
+}
+
+fn connection_status(connection: &ConnectionState) -> String {
+    match connection {
+        ConnectionState::Suspended => "已断开：Codex 原生界面（任务继续运行）".into(),
+        ConnectionState::Disconnected => "状态：未连接".into(),
+        ConnectionState::Connecting => "状态：正在连接…".into(),
+        ConnectionState::Connected => "状态：已连接".into(),
+        ConnectionState::RestartRequired => "状态：需要确认重启后连接".into(),
+        ConnectionState::CompatibilityWarning(error) => format!("状态：{error}"),
     }
 }
 

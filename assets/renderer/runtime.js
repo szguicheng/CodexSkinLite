@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 11;
+  const API_VERSION = 14;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -87,20 +87,25 @@
     layoutDurations: [],
   };
 
+  const BROWSER_TRANSPORT_SELECTOR = [
+    "[data-browser-sidebar-webview-host-root]",
+    "[data-browser-sidebar-webview]",
+  ].join(",");
+
   const SIDEBAR_SELECTOR = [
     ".app-shell-left-panel",
     "[data-app-shell-right-panel]",
     "[data-context-panel]",
     'aside[class*="_RightPanel_"]',
     '[data-app-shell-tabs="true"]',
-    "[data-browser-sidebar-webview-host-root]",
-    "[data-browser-sidebar-webview]",
   ].join(",");
+  const RIGHT_TAB_SELECTOR = '[data-app-shell-tab-strip-controller="right"]';
 
   const LAYOUT_SELECTOR = [
     "main",
     "header",
     SIDEBAR_SELECTOR,
+    RIGHT_TAB_SELECTOR,
     ".thread-scroll-container",
     "[data-app-shell-main-content-layout]",
     "[data-app-shell-header-toolbar]",
@@ -128,12 +133,13 @@
   ]);
 
   const queryAll = (root, selector) => [...root.querySelectorAll(selector)];
+  const isBrowserTransport = (node) =>
+    node?.matches?.(BROWSER_TRANSPORT_SELECTOR) ||
+    Boolean(node?.closest?.(BROWSER_TRANSPORT_SELECTOR));
+  const shellSidebars = (sidebars) =>
+    sidebars.filter((node) => !isBrowserTransport(node));
   const layoutSidebars = (sidebars) =>
-    sidebars.filter(
-      (node) =>
-        !isHidden(node) &&
-        !node.matches("[data-browser-sidebar-webview-host-root]"),
-    );
+    shellSidebars(sidebars).filter((node) => !isHidden(node));
 
   const markParts = () => {
     const desired = new Map();
@@ -143,16 +149,21 @@
     remember(document.documentElement, "root");
     const main = document.querySelector(MAIN_SELECTOR);
     remember(main, "main");
-    for (const node of queryAll(
-      document,
-      SIDEBAR_SELECTOR,
-    )) {
+    const rightTabs = queryAll(document, RIGHT_TAB_SELECTOR).filter((node) => !isHidden(node));
+    for (const node of shellSidebars(queryAll(document, SIDEBAR_SELECTOR))) {
       remember(node, "sidebar");
     }
     for (const node of queryAll(
       main || document,
       'header[data-pip-obstacle="app-shell-header"], header[data-app-shell-header-layout], header[data-app-shell-header-edge-scroll], header[class*="_Header_"], header.app-header-tint',
     )) {
+      // The transparent native header spans above the right tab row. Theme paint would cover it.
+      const headerRect = node.getBoundingClientRect();
+      if (rightTabs.some((tabs) => {
+        const rect = tabs.getBoundingClientRect();
+        return rect.left < headerRect.right && rect.right > headerRect.left &&
+          rect.top < headerRect.bottom && rect.bottom > headerRect.top;
+      })) continue;
       remember(node, "header");
     }
     const home = main?.querySelector(
@@ -338,6 +349,10 @@
       [data-csl-header-title-surface="true"] {
         background-color: transparent !important;
       }
+      ${background.useNativeBottomGradient === false ? `
+      [data-ds-thread-scroll="true"] [aria-hidden="true"].sticky.bottom-0 > [aria-hidden="true"].bg-gradient-to-t {
+        background: transparent !important;
+      }` : ""}
       ${theme.compiledCss || ""}`;
   };
 
@@ -364,7 +379,7 @@
       composerSurface;
     return {
       root:
-        main?.closest("[data-app-shell-root]") ||
+        main?.closest("[data-app-shell-root], [data-app-shell-unified-tab-strip]") ||
         main?.parentElement ||
         document.documentElement,
       main,
@@ -376,16 +391,18 @@
             '[data-csl-thread-content], [class*="max-w-(--thread-content-max-width)"]',
           ),
       composer,
-      sidebars: queryAll(document, SIDEBAR_SELECTOR),
+      sidebars: shellSidebars(queryAll(document, SIDEBAR_SELECTOR)),
     };
   };
 
+  const matchesOrContains = (node, selector) =>
+    node?.matches?.(selector) || Boolean(node?.querySelector?.(selector));
   const mutationAffectsLayout = (record) => {
     if (record.type === "attributes") {
       if (record.attributeName === "style") {
-        return record.target?.matches?.(SIDEBAR_SELECTOR) || false;
+        return matchesOrContains(record.target, `${SIDEBAR_SELECTOR},${RIGHT_TAB_SELECTOR}`);
       }
-      return record.target?.matches?.(LAYOUT_SELECTOR) || false;
+      return matchesOrContains(record.target, LAYOUT_SELECTOR);
     }
     const nodes = [...record.addedNodes, ...record.removedNodes];
     return nodes.some(
@@ -504,6 +521,7 @@
         layout.content,
         layout.composer,
         ...layoutSidebars(layout.sidebars),
+        ...queryAll(document, RIGHT_TAB_SELECTOR),
       ].filter((node) => node?.isConnected),
     );
     for (const node of state.observedResizeNodes) {
@@ -602,14 +620,22 @@
           availableRight = Math.max(rect.left, mainRect.left);
         }
       }
-      const availableWidth = Math.max(0, availableRight - availableLeft);
-      const elementWidth = Math.min(width, availableWidth);
-      const free = Math.max(0, availableWidth - elementWidth);
-      const leftMargin = availableLeft - mainRect.left + free / 2;
-      const rightMargin = mainRect.right - availableRight + free / 2;
       for (const element of next) {
-        setOwnedWidth(element, "margin-left", `${leftMargin}px`);
-        setOwnedWidth(element, "margin-right", `${rightMargin}px`);
+        const parentRect = element.parentElement?.getBoundingClientRect();
+        const parentLeft = parentRect?.width > 0 ? parentRect.left : mainRect.left;
+        const parentRight = parentRect?.width > 0 ? parentRect.right : mainRect.right;
+        const left = Math.max(availableLeft, parentLeft);
+        const right = Math.min(availableRight, parentRight);
+        const regionWidth = Math.max(0, right - left);
+        const targetWidth = Math.min(width, regionWidth);
+        const free = Math.max(0, regionWidth - targetWidth);
+        setOwnedWidth(
+          element,
+          "width",
+          `${targetWidth}px`,
+        );
+        setOwnedWidth(element, "margin-left", `${left - parentLeft + free / 2}px`);
+        setOwnedWidth(element, "margin-right", `${parentRight - right + free / 2}px`);
       }
     }
   };

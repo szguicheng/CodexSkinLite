@@ -12,6 +12,7 @@ fn menu_model_exposes_only_approved_actions() {
         [
             MenuAction::OpenCodex,
             MenuAction::Reconnect,
+            MenuAction::Disconnect,
             MenuAction::OpenSettings,
             MenuAction::Quit,
         ]

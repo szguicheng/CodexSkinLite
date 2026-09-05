@@ -31,6 +31,16 @@ describe("bootstrap", () => {
     expect(result).not.toBeInstanceOf(Promise);
     expect(result.revision).toBe(42);
   });
+
+  it("replaces the previous renderer API version", () => {
+    const window = installRuntime({
+      preload(currentWindow) {
+        currentWindow.__CODEX_SKIN_LITE__ = { apiVersion: 11, cleanup() {} };
+      },
+    });
+
+    expect(window.__CODEX_SKIN_LITE__.apiVersion).toBe(14);
+  });
 });
 
 describe("centered conversation", () => {
@@ -153,6 +163,43 @@ describe("new conversation composer", () => {
 });
 
 describe("Skin API", () => {
+  it.each(["true", "false", null])("protects right tabs across header layout flag %s and panel reopen", async (flag) => {
+    const window = installRuntime({ fixture: "modernThread" });
+    const header = window.document.querySelector('header');
+    if (flag !== null) header.dataset.appShellHeaderEdgeScroll = flag;
+    header.getBoundingClientRect = () => ({left:0,right:1200,top:0,bottom:46});
+    const tabs = window.document.createElement('div');
+    tabs.dataset.appShellTabStripController = "right";
+    tabs.getBoundingClientRect = () => ({left:800,right:1200,top:0,bottom:46});
+    const shell = window.document.querySelector('[data-app-shell-root]');
+    shell.removeAttribute('data-app-shell-root');
+    shell.dataset.appShellUnifiedTabStrip = 'false';
+    const main = window.document.querySelector('main');
+    const clip = window.document.createElement('div');
+    main.replaceWith(clip);
+    clip.append(main);
+    window.__CODEX_SKIN_LITE__.apply(evaPayload());
+    expect(header.dataset.dsPart).toBe('header');
+    shell.append(tabs);
+    await nextFrame(window);
+    expect(header.hasAttribute('data-ds-part')).toBe(false);
+    tabs.remove();
+    await nextFrame(window);
+    expect(header.dataset.dsPart).toBe('header');
+  });
+
+  it("can reveal the theme behind the native bottom fade without hiding the composer", () => {
+    const window = installRuntime({ fixture: "modernScrollingComposerWithModernRightPanel" });
+    const payload = evaPayload();
+    payload.theme.customization = {background:{useNativeBottomGradient:false}};
+    window.__CODEX_SKIN_LITE__.apply(payload);
+    expect(window.document.querySelector('#codex-skin-lite-theme').textContent).toContain('bg-gradient-to-t');
+    expect(window.document.querySelector('[data-thread-scroll-footer]')).not.toBeNull();
+    payload.revision++;
+    payload.theme.customization.background.useNativeBottomGradient = true;
+    window.__CODEX_SKIN_LITE__.apply(payload);
+    expect(window.document.querySelector('#codex-skin-lite-theme').textContent).not.toContain('bg-gradient-to-t');
+  });
   it("uses package artwork focus when no custom position is set", async () => {
     const window = installRuntime({ fixture: "modernThread" });
 
@@ -179,19 +226,29 @@ describe("Skin API", () => {
     ).toHaveLength(2);
   });
 
-  it("maps every modern right-panel layer to the shared sidebar theme part", () => {
+  it("marks shell tabs but never browser transport or nested transport panels", () => {
     const window = installRuntime({
       fixture: "modernScrollingComposerWithModernRightPanel",
+      preload(currentWindow) {
+        for (const node of currentWindow.document.querySelectorAll(
+          "[data-browser-sidebar-webview-host-root], [data-browser-sidebar-webview], [data-context-panel]",
+        )) {
+          node.dataset.dsPart = "sidebar";
+        }
+      },
     });
 
     window.__CODEX_SKIN_LITE__.apply(evaPayload());
 
+    expect(window.document.querySelector('[data-app-shell-tabs="true"]').dataset.dsPart).toBe(
+      "sidebar",
+    );
     for (const selector of [
-      '[data-app-shell-tabs="true"]',
       "[data-browser-sidebar-webview-host-root]",
       "[data-browser-sidebar-webview]",
+      "[data-browser-sidebar-webview] [data-context-panel]",
     ]) {
-      expect(window.document.querySelector(selector).dataset.dsPart).toBe("sidebar");
+      expect(window.document.querySelector(selector).hasAttribute("data-ds-part")).toBe(false);
     }
   });
 
@@ -438,45 +495,57 @@ describe("composer regressions", () => {
 
     window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
 
-    for (const element of [content, wrapper]) {
-      expect(element.style.marginLeft).toBe("0px");
-      expect(element.style.marginRight).toBe("300px");
-    }
+    expect(content.style.marginLeft).toBe("0px");
+    expect(content.style.marginRight).toBe("285px");
+    expect(wrapper.style.marginLeft).toBe("0px");
+    expect(wrapper.style.marginRight).toBe("300px");
   });
 
-  it("ignores the full-window browser webview host and recovers after panel collapse", async () => {
+  it("ignores full-window browser transport and recovers after its wrapper collapses", async () => {
     const window = installRuntime({
       fixture: "modernScrollingComposerWithModernRightPanel",
     });
-    const tabs = window.document.querySelector('[data-app-shell-tabs="true"]');
+    const wrapper = window.document.querySelector("#panel-wrapper");
     const host = window.document.querySelector(
       "[data-browser-sidebar-webview-host-root]",
     );
     const webview = window.document.querySelector("[data-browser-sidebar-webview]");
     const content = window.document.querySelector("[data-csl-thread-content]");
-    const rect = (left, right) => ({
-      bottom: 800,
-      height: 800,
-      left,
-      right,
-      top: 0,
-      width: right - left,
-      x: left,
-      y: 0,
-    });
-    host.getBoundingClientRect = () => rect(0, 1200);
+    const composer = window.document.querySelector('[data-pip-obstacle="thread-footer"]');
 
     await window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
 
-    expect(content.style.marginLeft).toBe("0px");
-    expect(content.style.marginRight).toBe("300px");
+    expect(content.getBoundingClientRect().left).toBeGreaterThanOrEqual(240);
+    expect(content.getBoundingClientRect().right).toBeLessThanOrEqual(900.5);
+    expect(composer.getBoundingClientRect().left).toBeGreaterThanOrEqual(240);
+    expect(composer.getBoundingClientRect().right).toBeLessThanOrEqual(900.5);
 
-    tabs.style.visibility = "hidden";
-    webview.style.visibility = "hidden";
+    host.style.display = "block";
+    webview.style.display = "block";
+    wrapper.style.display = "none";
     await nextFrame(window);
 
-    expect(content.style.marginLeft).toBe("150px");
-    expect(content.style.marginRight).toBe("150px");
+    expect(content.getBoundingClientRect().width).toBeGreaterThanOrEqual(899);
+    expect(content.getBoundingClientRect().right).toBeLessThanOrEqual(1200);
+  });
+
+  it("clamps constrained content to both edges of an inset parent", async () => {
+    const window = installRuntime({
+      fixture: "modernScrollingComposerWithModernRightPanel",
+      split: true,
+    });
+    const content = window.document.querySelector("[data-csl-thread-content]");
+    const composer = window.document.querySelector('[data-pip-obstacle="thread-footer"]');
+
+    await window.__CODEX_SKIN_LITE__.apply(layoutPayload(true, 900, 1));
+
+    expect(content.getBoundingClientRect().left).toBe(255);
+    expect(content.getBoundingClientRect().right).toBe(885);
+    expect(content.getBoundingClientRect().width).toBe(630);
+    expect(composer.getBoundingClientRect().left).toBe(240);
+    expect(composer.getBoundingClientRect().right).toBe(900);
+    expect(composer.getBoundingClientRect().width).toBe(660);
+    expect(content.getBoundingClientRect().left - composer.getBoundingClientRect().left).toBe(15);
   });
 
   it("makes the native title surface transparent under a themed header", () => {

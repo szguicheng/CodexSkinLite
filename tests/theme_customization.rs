@@ -16,10 +16,25 @@ fn default_customization_has_safe_baseline_values() {
     assert_eq!(value.background.offset_y_px, 0);
     assert_eq!(value.background.fill_mode, BackgroundFillMode::Cover);
     assert_eq!(value.background.opacity, 100);
+    assert!(value.background.use_native_bottom_gradient);
     assert_eq!(value.background.image, None);
     assert_eq!(value.composer, ComposerCustomization::default());
     assert_eq!(value.colors, PaletteCustomization::default());
     assert!(value.surfaces.is_empty());
+}
+
+#[test]
+fn bottom_gradient_preference_round_trips_and_old_themes_keep_native_gradient() {
+    let old: ThemeCustomization = serde_json::from_str(r#"{"background":{"opacity":72}}"#).unwrap();
+    assert!(old.background.use_native_bottom_gradient);
+    let mut custom = old;
+    custom.background.use_native_bottom_gradient = false;
+    let encoded = serde_json::to_string(&custom).unwrap();
+    assert!(encoded.contains("\"useNativeBottomGradient\":false"));
+    assert_eq!(
+        serde_json::from_str::<ThemeCustomization>(&encoded).unwrap(),
+        custom
+    );
 }
 
 #[test]

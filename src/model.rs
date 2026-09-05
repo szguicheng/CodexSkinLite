@@ -34,6 +34,7 @@ impl Default for AppSettings {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionState {
     Disconnected,
+    Suspended,
     Connecting,
     Connected,
     RestartRequired,

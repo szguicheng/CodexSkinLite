@@ -16,7 +16,7 @@ export function installRuntime(input) {
     options.fixture === "modernScrollingComposerWithModernRightPanel" ||
     options.fixture === "modernHomeComposer"
   ) {
-    installPanelGeometry(window);
+    installPanelGeometry(window, { split: options.split });
   }
   if (!window.__testObserverCounts) installObserverCounters(window);
   if (!window.__testBlobUrls) {
@@ -92,8 +92,11 @@ function fixtureHtml(name) {
     name === "modernScrollingComposerWithRightPanel"
       ? '<aside data-app-shell-right-panel="true"></aside>'
       : modernRightPanel
-        ? '<div data-app-shell-tabs="true"><div data-browser-sidebar-webview-host-root="true"><div data-browser-sidebar-webview="true"></div></div></div>'
+        ? '<div id="panel-wrapper"><aside data-app-shell-tabs="true"></aside></div>'
       : "";
+  const browserTransport = modernRightPanel
+    ? '<div data-browser-sidebar-webview-host-root="true"><div data-browser-sidebar-webview="true"><div data-context-panel="true"></div></div></div>'
+    : "";
   const scrollingComposer = name.includes("ScrollingComposer");
   const headerTitle = name === "modernHeaderTitle";
   if (
@@ -142,9 +145,11 @@ function fixtureHtml(name) {
       : `
         <div data-app-shell-main-content-layout="thread-edge-scroll">
           <div class="thread-scroll-container" data-app-action-timeline-scroll="true">
-            <div data-csl-thread-content="true" style="padding-top: 2px">
-              <article data-message-id="one"></article>
-            </div>
+            ${modernRightPanel ? '<div class="body-wrap">' : ""}
+              <div data-csl-thread-content="true" style="padding-top: 2px">
+                <article data-message-id="one"></article>
+              </div>
+            ${modernRightPanel ? "</div>" : ""}
             ${scrollingComposer ? footer : ""}
           </div>
           ${scrollingComposer ? "" : composer}
@@ -157,12 +162,13 @@ function fixtureHtml(name) {
           ${content}
         </main>
         ${rightPanel}
-      </div>`;
+      </div>
+      ${browserTransport}`;
   }
   throw new Error(`unknown fixture: ${name}`);
 }
 
-function installPanelGeometry(window) {
+function installPanelGeometry(window, { split = false } = {}) {
   const rect = (left, right) => ({
     bottom: 800,
     height: 800,
@@ -176,19 +182,51 @@ function installPanelGeometry(window) {
       return this;
     },
   });
-  window.document.querySelector("main").getBoundingClientRect = () => rect(0, 1200);
+  const modernRightPanel = window.document.querySelector("#panel-wrapper") !== null;
+  const mainLeft = modernRightPanel ? 240 : 0;
+  const mainRight = split ? 900 : 1200;
+  window.document.querySelector("main").getBoundingClientRect = () => rect(mainLeft, mainRight);
   window.document.querySelector(".app-shell-left-panel").getBoundingClientRect = () =>
     rect(-240, 0);
-  const panels = window.document.querySelectorAll(
-    '[data-app-shell-right-panel], [data-app-shell-tabs="true"], [data-browser-sidebar-webview-host-root], [data-browser-sidebar-webview]',
-  );
-  for (const panel of panels) panel.getBoundingClientRect = () => rect(900, 1200);
-  window.document.querySelector("[data-csl-thread-content]").getBoundingClientRect = () =>
-    rect(150, 1050);
   const widthTarget =
     window.document.querySelector('[data-pip-obstacle="thread-footer"]') ||
     window.document.querySelector("[data-composer-surface-variant]");
-  widthTarget.getBoundingClientRect = () => rect(150, 1050);
+  for (const panel of window.document.querySelectorAll(
+    '[data-app-shell-right-panel], [data-app-shell-tabs="true"]',
+  )) panel.getBoundingClientRect = () => rect(900, 1200);
+  for (const transport of window.document.querySelectorAll(
+    "[data-browser-sidebar-webview-host-root], [data-browser-sidebar-webview], [data-context-panel]",
+  )) transport.getBoundingClientRect = () => rect(0, 1200);
+  if (modernRightPanel) {
+    const panelWrapper = window.document.querySelector("#panel-wrapper");
+    const tabs = window.document.querySelector('[data-app-shell-tabs="true"]');
+    tabs.getBoundingClientRect = () =>
+      panelWrapper.style.display === "none" ? rect(0, 0) : rect(900, 1200);
+    const content = window.document.querySelector("[data-csl-thread-content]");
+    const contentParent = content.parentElement;
+    contentParent.getBoundingClientRect = () => rect(mainLeft + 15, mainRight - 15);
+    const composerParent = widthTarget.parentElement;
+    composerParent.getBoundingClientRect = () => rect(mainLeft, mainRight);
+    const targetRect = (element) => {
+      const parent = element.parentElement.getBoundingClientRect();
+      const widthValue = element.style.width;
+      const declaredWidth = widthValue.endsWith("px")
+        ? Number.parseFloat(widthValue)
+        : parent.width;
+      const maxWidth = Number.parseFloat(element.style.maxWidth);
+      const width = Number.isFinite(maxWidth)
+        ? Math.min(declaredWidth, maxWidth)
+        : declaredWidth;
+      const left = parent.left + (Number.parseFloat(element.style.marginLeft) || 0);
+      return rect(left, left + width);
+    };
+    content.getBoundingClientRect = () => targetRect(content);
+    widthTarget.getBoundingClientRect = () => targetRect(widthTarget);
+  } else {
+    window.document.querySelector("[data-csl-thread-content]").getBoundingClientRect = () =>
+      rect(150, 1050);
+    widthTarget.getBoundingClientRect = () => rect(150, 1050);
+  }
 }
 
 export function evaPayload(revision = 1) {

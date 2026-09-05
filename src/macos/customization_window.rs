@@ -8,8 +8,9 @@ use objc2::sel;
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
     NSBackingStoreType, NSBox, NSBoxType, NSButton, NSColor, NSColorSpace, NSColorWell,
-    NSColorWellStyle, NSFont, NSImage, NSImageScaling, NSImageView, NSPopUpButton, NSScrollView,
-    NSTextField, NSTitlePosition, NSView, NSWindow, NSWindowStyleMask,
+    NSColorWellStyle, NSControlStateValueOff, NSControlStateValueOn, NSFont, NSImage,
+    NSImageScaling, NSImageView, NSPopUpButton, NSScrollView, NSTextField, NSTitlePosition, NSView,
+    NSWindow, NSWindowStyleMask,
 };
 use objc2_foundation::{NSData, NSPoint, NSRect, NSSize, NSString};
 
@@ -24,6 +25,7 @@ const TAG_BACKGROUND_Y: isize = 1002;
 const TAG_BACKGROUND_OPACITY: isize = 1003;
 const TAG_BACKGROUND_FILL_MODE: isize = 1004;
 const TAG_BACKGROUND_IMAGE: isize = 1005;
+const TAG_NATIVE_BOTTOM_GRADIENT: isize = 1006;
 const TAG_COLOR_BACKGROUND: isize = 1010;
 const TAG_COLOR_PANEL: isize = 1011;
 const TAG_COLOR_ACCENT: isize = 1012;
@@ -189,6 +191,26 @@ pub(super) fn show(
         816.0,
         mtm,
     );
+
+    let native_gradient = unsafe {
+        NSButton::checkboxWithTitle_target_action(
+            &NSString::from_str("使用 Codex 默认底部渐变（取消勾选则显示主题背景）"),
+            None,
+            None,
+            mtm,
+        )
+    };
+    native_gradient.setTag(TAG_NATIVE_BOTTOM_GRADIENT);
+    native_gradient.setFrame(NSRect::new(
+        NSPoint::new(300.0, 816.0),
+        NSSize::new(650.0, 24.0),
+    ));
+    native_gradient.setState(if draft.background.use_native_bottom_gradient {
+        NSControlStateValueOn
+    } else {
+        NSControlStateValueOff
+    });
+    document.addSubview(&native_gradient);
 
     add_label(&document, "颜色覆盖", 48.0, 755.0, 360.0, 24.0, mtm);
     add_color_field(
@@ -414,6 +436,12 @@ pub(super) fn collect_draft(
         .ok_or_else(|| "图片填充控件不可用".to_string())?
         .indexOfSelectedItem();
     draft.background.fill_mode = fill_mode_from_index(fill_mode)?;
+    draft.background.use_native_bottom_gradient = content
+        .viewWithTag(TAG_NATIVE_BOTTOM_GRADIENT)
+        .and_then(|view| view.downcast::<NSButton>().ok())
+        .ok_or_else(|| "底部渐变控件不可用".to_string())?
+        .state()
+        == NSControlStateValueOn;
     draft.colors.background = read_optional_color(&content, TAG_COLOR_BACKGROUND, "背景色")?;
     draft.colors.panel = read_optional_color(&content, TAG_COLOR_PANEL, "面板色")?;
     draft.colors.accent = read_optional_color(&content, TAG_COLOR_ACCENT, "强调色")?;

@@ -44,6 +44,11 @@ define_class!(
             let _ = self.ivars().controller.send(AppCommand::ConfirmRestart);
         }
 
+        #[unsafe(method(disconnect:))]
+        fn disconnect(&self, _sender: Option<&AnyObject>) {
+            let _ = self.ivars().controller.send(AppCommand::Disconnect);
+        }
+
         #[unsafe(method(openSettings:))]
         fn open_settings(&self, _sender: Option<&AnyObject>) {
             let mtm = MainThreadMarker::from(self);

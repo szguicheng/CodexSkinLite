@@ -14,6 +14,7 @@ pub trait RendererRuntime: Send + Sync {
     fn apply<'a>(&'a self, payload: &'a RendererPayload) -> RuntimeFuture<'a, u64>;
     fn open<'a>(&'a self, settings: &'a AppSettings) -> RuntimeFuture<'a, ConnectionState>;
     fn reconnect<'a>(&'a self, settings: &'a AppSettings) -> RuntimeFuture<'a, ConnectionState>;
+    fn disconnect<'a>(&'a self, settings: &'a AppSettings) -> RuntimeFuture<'a, ()>;
     fn confirmed_restart<'a>(
         &'a self,
         settings: &'a AppSettings,
@@ -30,6 +31,7 @@ pub enum AppCommand {
     OpenCodex,
     ConfirmRestart,
     Reconnect,
+    Disconnect,
     ImportTheme(PathBuf),
     ActivateTheme(String),
     SetThemeEnabled(bool),
@@ -78,7 +80,9 @@ impl Controller {
     pub async fn handle(&mut self, command: AppCommand) -> anyhow::Result<()> {
         let result = self.handle_inner(command).await;
         if let Err(error) = &result {
-            self.connection = ConnectionState::CompatibilityWarning(error.to_string());
+            if !matches!(self.connection, ConnectionState::Suspended) {
+                self.connection = ConnectionState::CompatibilityWarning(error.to_string());
+            }
             self.publish();
             self.sink.report_error("CodexSkinLite", &error.to_string());
         }
@@ -109,6 +113,13 @@ impl Controller {
                 if matches!(self.connection, ConnectionState::Connected) {
                     self.apply_saved_settings().await?;
                 }
+                self.publish();
+            }
+            AppCommand::Disconnect => {
+                self.preview_customization = None;
+                self.connection = ConnectionState::Disconnected;
+                self.runtime.disconnect(&self.settings).await?;
+                self.connection = ConnectionState::Suspended;
                 self.publish();
             }
             AppCommand::ImportTheme(path) => {
@@ -322,6 +333,12 @@ impl Controller {
     }
 
     async fn apply_candidate(&mut self, candidate: AppSettings) -> anyhow::Result<()> {
+        if matches!(self.connection, ConnectionState::Suspended) {
+            self.settings_store.save(&candidate)?;
+            self.settings = candidate;
+            self.publish();
+            return Ok(());
+        }
         self.revision += 1;
         let candidate_payload = self.payload(&candidate, self.revision)?;
         if let Err(error) = self.apply_renderer_payload(&candidate_payload).await {
@@ -378,7 +395,7 @@ impl Default for NativeRuntime {
 }
 
 impl NativeRuntime {
-    async fn connect_once(&self, settings: &AppSettings) -> anyhow::Result<ConnectionState> {
+    async fn raw_session(settings: &AppSettings) -> anyhow::Result<crate::cdp::CdpSession> {
         let targets = crate::cdp::list_targets(settings.debug_port).await?;
         let target = crate::cdp::pick_primary_target(&targets)?;
         let websocket = target
@@ -386,10 +403,21 @@ impl NativeRuntime {
             .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Codex target has no WebSocket URL"))?;
         crate::cdp::validate_websocket_url(websocket, settings.debug_port)?;
-        let session = crate::cdp::CdpSession::connect(websocket).await?;
-        session
+        crate::cdp::CdpSession::connect(websocket).await
+    }
+
+    async fn connect_once(&self, settings: &AppSettings) -> anyhow::Result<ConnectionState> {
+        if let Some(previous) = self.session.lock().await.take() {
+            previous.detach().await?;
+        }
+        let session = Self::raw_session(settings).await?;
+        if let Err(error) = session
             .install_bootstrap(crate::renderer::bootstrap_script())
-            .await?;
+            .await
+        {
+            let _ = session.detach().await;
+            return Err(error);
+        }
         *self.session.lock().await = Some(session);
         Ok(ConnectionState::Connected)
     }
@@ -414,6 +442,21 @@ impl NativeRuntime {
 }
 
 impl RendererRuntime for NativeRuntime {
+    fn disconnect<'a>(&'a self, settings: &'a AppSettings) -> RuntimeFuture<'a, ()> {
+        Box::pin(async move {
+            // Attach without installing anything when recovering a previous app instance's layer.
+            let session = match self.session.lock().await.take() {
+                Some(session) => session,
+                None => Self::raw_session(settings).await?,
+            };
+            session.detach().await.map_err(|error| {
+                anyhow::anyhow!(
+                    "连接已释放，但未能确认原生界面恢复；Codex 未重启，可再次尝试断开：{error}"
+                )
+            })
+        })
+    }
+
     fn apply<'a>(&'a self, payload: &'a RendererPayload) -> RuntimeFuture<'a, u64> {
         Box::pin(async move {
             let session = self

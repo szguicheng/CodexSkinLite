@@ -2,6 +2,7 @@
 pub enum MenuAction {
     OpenCodex,
     Reconnect,
+    Disconnect,
     OpenSettings,
     Quit,
 }
@@ -18,6 +19,7 @@ pub(crate) fn build_menu(mtm: MainThreadMarker, target: &AnyObject) -> Retained<
     for (title, action) in [
         ("打开 Codex", sel!(openCodex:)),
         ("重新连接", sel!(reconnect:)),
+        ("断开连接", sel!(disconnect:)),
         ("设置…", sel!(openSettings:)),
     ] {
         let item = unsafe {
@@ -46,9 +48,10 @@ pub(crate) fn build_menu(mtm: MainThreadMarker, target: &AnyObject) -> Retained<
 }
 
 impl MenuAction {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::OpenCodex,
         Self::Reconnect,
+        Self::Disconnect,
         Self::OpenSettings,
         Self::Quit,
     ];

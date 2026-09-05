@@ -17,6 +17,7 @@ pub struct CdpSession {
     outbound: mpsc::UnboundedSender<Message>,
     pending: PendingMap,
     next_id: Arc<AtomicU64>,
+    bootstrap_ids: Arc<Mutex<Vec<String>>>,
 }
 
 impl CdpSession {
@@ -72,6 +73,7 @@ impl CdpSession {
             outbound,
             pending,
             next_id: Arc::new(AtomicU64::new(1)),
+            bootstrap_ids: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -89,11 +91,17 @@ impl CdpSession {
     }
 
     pub async fn install_bootstrap(&self, script: &str) -> anyhow::Result<()> {
-        self.send_command(
-            "Page.addScriptToEvaluateOnNewDocument",
-            json!({ "source": script }),
-        )
-        .await?;
+        let registration = self
+            .send_command(
+                "Page.addScriptToEvaluateOnNewDocument",
+                json!({ "source": script }),
+            )
+            .await?;
+        let id = registration
+            .get("identifier")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("CDP bootstrap registration has no identifier"))?;
+        self.bootstrap_ids.lock().await.push(id.to_string());
         self.evaluate(script).await?;
         Ok(())
     }
@@ -112,6 +120,33 @@ impl CdpSession {
             .send(Message::Close(None))
             .map_err(|_| anyhow::anyhow!("CDP session is already closed"))?;
         Ok(())
+    }
+
+    pub async fn detach(self) -> anyhow::Result<()> {
+        let ids = std::mem::take(&mut *self.bootstrap_ids.lock().await);
+        let mut outcome = Ok(());
+        for id in ids {
+            if let Err(error) = self
+                .send_command(
+                    "Page.removeScriptToEvaluateOnNewDocument",
+                    json!({"identifier": id}),
+                )
+                .await
+            {
+                outcome = Err(error);
+            }
+        }
+        if let Err(error) = self
+            .evaluate(
+                "window.__CODEX_SKIN_LITE__?.cleanup?.(); delete window.__CODEX_SKIN_LITE__; true",
+            )
+            .await
+        {
+            outcome = Err(error);
+        }
+        let closed = self.close().await;
+        outcome?;
+        closed
     }
 
     async fn send_command(&self, method: &str, params: Value) -> anyhow::Result<Value> {

@@ -10,6 +10,36 @@ use codex_skin_lite::settings::SettingsStore;
 use codex_skin_lite::theme::{SurfacePart, ThemeStore};
 
 #[tokio::test]
+async fn disconnect_preserves_preferences_and_only_reconnect_reapplies_them() {
+    let mut env = controller_environment(false);
+    env.controller.handle(AppCommand::Reconnect).await.unwrap();
+    let saved = env.settings.load().unwrap();
+    env.controller.handle(AppCommand::Disconnect).await.unwrap();
+    assert_eq!(env.settings.load().unwrap(), saved);
+    assert_eq!(*env.renderer_revision.lock().unwrap(), 0);
+    assert_eq!(
+        env.sink
+            .snapshots
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .connection,
+        ConnectionState::Suspended
+    );
+    env.controller
+        .handle(AppCommand::SetConversationWidth(880))
+        .await
+        .unwrap();
+    assert_eq!(env.applied_payloads.lock().unwrap().len(), 1);
+    env.controller.handle(AppCommand::Reconnect).await.unwrap();
+    let applied = env.applied_payloads.lock().unwrap();
+    assert_eq!(applied.len(), 2);
+    assert_eq!(applied[1].conversation_max_width, 880);
+    assert!(applied[1].theme_enabled);
+}
+
+#[tokio::test]
 async fn failed_theme_apply_keeps_previous_active_theme() {
     let mut env = controller_environment(true);
 
@@ -332,6 +362,13 @@ struct FakeRuntime {
 }
 
 impl RendererRuntime for FakeRuntime {
+    fn disconnect<'a>(&'a self, _settings: &'a AppSettings) -> RuntimeFuture<'a, ()> {
+        Box::pin(async move {
+            *self.renderer_revision.lock().unwrap() = 0;
+            Ok(())
+        })
+    }
+
     fn apply<'a>(&'a self, payload: &'a RendererPayload) -> RuntimeFuture<'a, u64> {
         Box::pin(async move {
             if std::mem::take(&mut *self.fail_apply.lock().unwrap()) {
