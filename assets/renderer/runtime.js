@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_VERSION = 14;
+  const API_VERSION = 15;
   const existing = window.__CODEX_SKIN_LITE__;
   if (existing?.apiVersion === API_VERSION) return;
   const MAIN_SELECTOR =
@@ -349,6 +349,10 @@
       [data-csl-header-title-surface="true"] {
         background-color: transparent !important;
       }
+      ${background.useNativeTopGradient === false ? `
+      [data-ds-part="main"] [data-app-shell-main-content-top-fade] {
+        background-image: none !important;
+      }` : ""}
       ${background.useNativeBottomGradient === false ? `
       [data-ds-thread-scroll="true"] [aria-hidden="true"].sticky.bottom-0 > [aria-hidden="true"].bg-gradient-to-t {
         background: transparent !important;

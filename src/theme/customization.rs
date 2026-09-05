@@ -101,6 +101,7 @@ pub struct BackgroundCustomization {
     pub fill_mode: BackgroundFillMode,
     pub opacity: u8,
     pub use_native_bottom_gradient: bool,
+    pub use_native_top_gradient: bool,
     pub image: Option<BackgroundImageCustomization>,
 }
 
@@ -114,6 +115,7 @@ impl Default for BackgroundCustomization {
             fill_mode: BackgroundFillMode::Cover,
             opacity: 100,
             use_native_bottom_gradient: true,
+            use_native_top_gradient: true,
             image: None,
         }
     }
@@ -195,6 +197,7 @@ impl ThemeCustomization {
 
 impl ThemeCustomization {
     pub(crate) fn with_saved_overrides(mut self, overrides: &Self) -> Self {
+        self.background.use_native_top_gradient = overrides.background.use_native_top_gradient;
         self.background.use_native_bottom_gradient =
             overrides.background.use_native_bottom_gradient;
         if overrides.background.position_x.is_some() {

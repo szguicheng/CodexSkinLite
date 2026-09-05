@@ -26,6 +26,7 @@ const TAG_BACKGROUND_OPACITY: isize = 1003;
 const TAG_BACKGROUND_FILL_MODE: isize = 1004;
 const TAG_BACKGROUND_IMAGE: isize = 1005;
 const TAG_NATIVE_BOTTOM_GRADIENT: isize = 1006;
+const TAG_NATIVE_TOP_GRADIENT: isize = 1007;
 const TAG_COLOR_BACKGROUND: isize = 1010;
 const TAG_COLOR_PANEL: isize = 1011;
 const TAG_COLOR_ACCENT: isize = 1012;
@@ -192,25 +193,38 @@ pub(super) fn show(
         mtm,
     );
 
-    let native_gradient = unsafe {
-        NSButton::checkboxWithTitle_target_action(
-            &NSString::from_str("使用 Codex 默认底部渐变（取消勾选则显示主题背景）"),
-            None,
-            None,
-            mtm,
-        )
-    };
-    native_gradient.setTag(TAG_NATIVE_BOTTOM_GRADIENT);
-    native_gradient.setFrame(NSRect::new(
-        NSPoint::new(300.0, 816.0),
-        NSSize::new(650.0, 24.0),
-    ));
-    native_gradient.setState(if draft.background.use_native_bottom_gradient {
-        NSControlStateValueOn
-    } else {
-        NSControlStateValueOff
-    });
-    document.addSubview(&native_gradient);
+    for (title, tag, checked, x) in [
+        (
+            "使用 Codex 默认顶部渐变",
+            TAG_NATIVE_TOP_GRADIENT,
+            draft.background.use_native_top_gradient,
+            300.0,
+        ),
+        (
+            "使用 Codex 默认底部渐变",
+            TAG_NATIVE_BOTTOM_GRADIENT,
+            draft.background.use_native_bottom_gradient,
+            620.0,
+        ),
+    ] {
+        let native_gradient = unsafe {
+            NSButton::checkboxWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
+        };
+        native_gradient.setTag(tag);
+        native_gradient.setFrame(NSRect::new(
+            NSPoint::new(x, 816.0),
+            NSSize::new(300.0, 24.0),
+        ));
+        native_gradient.setToolTip(Some(&NSString::from_str(
+            "取消勾选则显示主题背景；点击预览查看效果，保存后保留此选择。",
+        )));
+        native_gradient.setState(if checked {
+            NSControlStateValueOn
+        } else {
+            NSControlStateValueOff
+        });
+        document.addSubview(&native_gradient);
+    }
 
     add_label(&document, "颜色覆盖", 48.0, 755.0, 360.0, 24.0, mtm);
     add_color_field(
@@ -436,6 +450,12 @@ pub(super) fn collect_draft(
         .ok_or_else(|| "图片填充控件不可用".to_string())?
         .indexOfSelectedItem();
     draft.background.fill_mode = fill_mode_from_index(fill_mode)?;
+    draft.background.use_native_top_gradient = content
+        .viewWithTag(TAG_NATIVE_TOP_GRADIENT)
+        .and_then(|view| view.downcast::<NSButton>().ok())
+        .ok_or_else(|| "顶部渐变控件不可用".to_string())?
+        .state()
+        == NSControlStateValueOn;
     draft.background.use_native_bottom_gradient = content
         .viewWithTag(TAG_NATIVE_BOTTOM_GRADIENT)
         .and_then(|view| view.downcast::<NSButton>().ok())

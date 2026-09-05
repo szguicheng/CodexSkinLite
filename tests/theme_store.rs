@@ -106,8 +106,9 @@ fn editor_reopens_saved_gradient_and_other_customization_fields() {
     }
     draft.composer.bottom_inset_px = 17;
     draft.composer.horizontal_inset_px = 23;
-    for native in [false, true] {
-        draft.background.use_native_bottom_gradient = native;
+    for (top, bottom) in [(false, true), (true, false), (false, false), (true, true)] {
+        draft.background.use_native_top_gradient = top;
+        draft.background.use_native_bottom_gradient = bottom;
         env.store
             .save_customization("eva-warm-cream", &draft)
             .unwrap();

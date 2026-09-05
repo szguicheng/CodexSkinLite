@@ -49,7 +49,7 @@ It works alongside the official Codex app and does not modify the official `Code
 - **Add a softer background** — Use a background image with position, fill mode, and opacity controls.
 - **Choose a more comfortable width** — Keep conversations and the composer centered with a bounded maximum width.
 - **Keep settings per theme** — Your custom adjustments stay with the theme you edited.
-- **Choose your bottom background** — Keep Codex's native bottom gradient or let your theme background show through.
+- **Choose your top and bottom backgrounds** — Independently keep Codex's native top and bottom gradients or let your theme background show through.
 - **Return to the native interface** — Disconnect to remove CodexSkinLite's rendering layer without closing Codex or interrupting running tasks. Reconnect when you want your saved appearance back.
 
 ## In-app preview

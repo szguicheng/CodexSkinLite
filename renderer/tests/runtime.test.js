@@ -39,7 +39,7 @@ describe("bootstrap", () => {
       },
     });
 
-    expect(window.__CODEX_SKIN_LITE__.apiVersion).toBe(14);
+    expect(window.__CODEX_SKIN_LITE__.apiVersion).toBe(15);
   });
 });
 
@@ -163,6 +163,28 @@ describe("new conversation composer", () => {
 });
 
 describe("Skin API", () => {
+  it.each(['visible', 'full-bleed'])("toggles native top fade %s independently and restores it on cleanup", (mode) => {
+    const window = installRuntime({fixture:'modernThread'});
+    const fade = window.document.createElement('div');
+    fade.setAttribute('data-app-shell-main-content-top-fade', mode);
+    fade.style.backgroundImage = 'linear-gradient(white, transparent)';
+    window.document.querySelector('main').append(fade);
+    const original = window.getComputedStyle(fade).backgroundImage;
+    const payload = evaPayload();
+    payload.theme.customization = {background:{useNativeTopGradient:false, useNativeBottomGradient:true}};
+    window.__CODEX_SKIN_LITE__.apply(payload);
+    expect(window.getComputedStyle(fade).backgroundImage).toBe('none');
+    expect(window.document.querySelector('header').dataset.dsPart).toBe('header');
+    payload.revision++;
+    payload.theme.customization.background.useNativeTopGradient = true;
+    window.__CODEX_SKIN_LITE__.apply(payload);
+    expect(window.getComputedStyle(fade).backgroundImage).toBe(original);
+    payload.revision++;
+    payload.theme.customization.background.useNativeTopGradient = false;
+    window.__CODEX_SKIN_LITE__.apply(payload);
+    window.__CODEX_SKIN_LITE__.cleanup();
+    expect(window.getComputedStyle(fade).backgroundImage).toBe(original);
+  });
   it.each(["true", "false", null])("protects right tabs across header layout flag %s and panel reopen", async (flag) => {
     const window = installRuntime({ fixture: "modernThread" });
     const header = window.document.querySelector('header');
